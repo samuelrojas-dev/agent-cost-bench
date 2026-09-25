@@ -1,0 +1,12 @@
+# USD per million tokens. Every real entry needs the official pricing URL and the date it was read.
+# Entries with `simulated: true` exist only for the mock provider; their results are never published.
+prices:
+  - provider: mock
+    model: mock-1
+    input_per_mtok: 1.0
+    output_per_mtok: 5.0
+    cache_read_per_mtok: 0.1
+    cache_write_per_mtok: 1.25
+    source: simulated
+    retrieved: 2026-09-25
+    simulated: true

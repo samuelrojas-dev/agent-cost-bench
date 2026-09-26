@@ -66,6 +66,10 @@ Verified without calling the API (no real call has been made to Anthropic):
   `ANTHROPIC_BASE_URL=https://attacker.example` set, the client uses only the given key,
   the official URL and no retries.
 - Pricing page and token-counting page, read 2026-09-26.
+- Gemini accepts its model `Content` replayed verbatim: run `smoke-gemini` (commit 324d17f,
+  `gemini-3.5-flash-lite`, 2026-09-26) made a tool call on turn 1 and answered on turn 2
+  after the replay (159 + 16 and 249 + 18 tokens). Whether that turn carried a thought
+  signature was not recorded.
 
 Assumed, not verified:
 - `max_tokens` bounds thinking plus visible output on every model (documented behaviour of
@@ -74,8 +78,6 @@ Assumed, not verified:
   something else, every call fails loudly, which is safe but blocks runs.
 - `thinking_tokens` is close enough to split reasoning from output for analysis. Costs do
   not depend on it.
-- Gemini accepts its model `Content` replayed verbatim. Unit-tested only; the earlier smoke
-  run exercised the previous per-call mechanism.
 
 ## Consequences
 - Defenses must not rewrite assistant messages: a provider replays its own turn and would

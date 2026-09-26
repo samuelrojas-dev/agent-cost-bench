@@ -33,3 +33,18 @@ prices:
     max_prompt_tokens: 1000000
     source: https://platform.claude.com/docs/en/about-claude/pricing
     retrieved: 2026-09-26
+
+  # Standard tab, paid tier, as copied from the page by the repo owner on 2026-09-25 (the page
+  # is not reachable from the build environment). Output includes thinking tokens.
+  # cache_write: the page lists no per-token price for implicit caching; recorded as 0 for
+  # that reason, not as a measured price. max_prompt_tokens: single tier on the page, so the
+  # context window, input_token_limit 1048576 from models.get on 2026-09-26.
+  - provider: gemini
+    model: gemini-3.5-flash-lite
+    input_per_mtok: 0.30
+    output_per_mtok: 2.50
+    cache_read_per_mtok: 0.03
+    cache_write_per_mtok: 0.0
+    max_prompt_tokens: 1048576
+    source: https://ai.google.dev/gemini-api/docs/pricing
+    retrieved: 2026-09-25

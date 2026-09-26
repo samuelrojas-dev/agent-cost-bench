@@ -11,12 +11,13 @@ from dowbench.providers.base import ToolCall
 def test_seed_dataset_loads() -> None:
     dataset = load_dataset()
     assert len(dataset.benign) == 5
-    assert len(dataset.attacks) == 5
+    assert len(dataset.attacks) == 6
     assert {a.family for a in dataset.attacks} == {
         "tool_loop",
         "output_flood",
         "reasoning_bomb",
         "context_bloat",
+        "mcp_chain",
     }
     assert all(a.source for a in dataset.attacks)
 
@@ -67,3 +68,33 @@ def test_toolbox_injects_only_into_target_tool() -> None:
     assert "PAYLOAD" in box.run(ToolCall(id="1", name="fetch_doc", arguments={"doc_id": "x"}))
     assert "PAYLOAD" not in box.run(ToolCall(id="2", name="search", arguments={"query": "x"}))
     assert box.run(ToolCall(id="3", name="nope")).startswith("error")
+
+
+def test_tool_description_vector_requires_target_tool() -> None:
+    with pytest.raises(ValidationError, match="needs target_tool"):
+        Attack(
+            id="a",
+            family="mcp_chain",
+            vector="tool_description",
+            benign_task="b",
+            payload="p",
+            expected_signal="repeated_tool_calls",
+            source="s",
+        )
+
+
+def test_toolbox_injects_into_description_without_touching_results() -> None:
+    box = ToolBox("search", Injection(tool="search", payload="MCP-PAYLOAD", where="description"))
+    search = next(s for s in box.specs if s.name == "search")
+    other = next(s for s in box.specs if s.name != "search")
+    assert "MCP-PAYLOAD" in search.description  # payload rides in the tool description
+    assert "MCP-PAYLOAD" not in other.description  # only the targeted tool
+    # description-mode injection never alters tool results
+    assert "MCP-PAYLOAD" not in box.run(ToolCall(id="1", name="search", arguments={"query": "x"}))
+
+
+def test_seed_has_the_mcp_chain_attack() -> None:
+    attack = load_dataset().attack("mcp-chain-extend-001")
+    assert attack.family == "mcp_chain"
+    assert attack.vector == "tool_description"
+    assert attack.target_tool == "search"

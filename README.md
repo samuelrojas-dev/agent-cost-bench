@@ -139,6 +139,7 @@ payloads for four families, each crediting where the pattern is described.
 | `output_flood` | user prompt | promptfoo divergent-repetition |
 | `reasoning_bomb` | tool result | OverThink, arXiv:2502.02542 |
 | `context_bloat` | tool result | OWASP Top 10 for LLM Apps 2025, LLM10 |
+| `mcp_chain` | tool description | Beyond Max Tokens, arXiv:2601.10955 |
 
 **Defenses**: `none` (baseline), `token_budget`, `turn_limit`, `loop_detect`.
 
@@ -182,7 +183,7 @@ python -m pytest && ruff check . && ruff format --check . && mypy src tests
 Every non-obvious decision is a short ADR in [`docs/adr/`](docs/adr/): the metric,
 the provider interface, the safety ceiling, each adapter, spend and key safety, the
 findings of an adversarial review of the budget guard, unpriced runs, request auditing,
-the cumulative budget, the report, and bringing your own agent.
+the cumulative budget, the report, bringing your own agent, and the MCP tool-description attack.
 
 ## License
 

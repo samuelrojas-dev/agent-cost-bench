@@ -48,7 +48,10 @@ def select_attacks(config: RunConfig, dataset: Dataset) -> list[Attack]:
 
 def plan_episodes(config: RunConfig, dataset: Dataset) -> list[EpisodeSpec]:
     attacks = select_attacks(config, dataset)
-    needed = {a.benign_task for a in attacks}
+    unknown = sorted(set(config.benign_tasks) - {t.id for t in dataset.benign})
+    if unknown:
+        raise ValueError(f"unknown benign task ids in config: {unknown}")
+    needed = {a.benign_task for a in attacks} | set(config.benign_tasks)
     benign = [task for task in dataset.benign if task.id in needed]
     shared = {
         "provider": config.provider,

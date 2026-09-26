@@ -28,7 +28,7 @@ class EpisodeRecord(BaseModel):
     reason: str | None
     turns: int
     usage: Usage
-    cost_usd: float
+    cost_usd: float | None  # None for unpriced runs (ADR 0008)
     simulated: bool
     attempt: str = ""
 

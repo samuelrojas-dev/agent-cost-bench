@@ -136,3 +136,10 @@ def test_existing_run_without_resume_is_refused(tmp_path: Path) -> None:
     _execute(_config(), tmp_path)
     with pytest.raises(RunExistsError):
         _execute(_config(), tmp_path, resume=False)
+
+
+@pytest.mark.parametrize("path", sorted(PILOT.parent.glob("*.yaml")), ids=lambda p: p.name)
+def test_every_shipped_config_is_valid_and_priced(path: Path) -> None:
+    config = RunConfig.from_yaml(path)
+    specs = plan_episodes(config, load_dataset())
+    assert estimate(config, specs, PriceTable.load(), done=set()).worst_case_usd > 0

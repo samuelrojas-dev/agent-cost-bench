@@ -49,6 +49,8 @@ class RunInfo(BaseModel):
     simulated: bool
     episodes_planned: int
     config: RunConfig
+    # Requested model -> versions the provider reported serving (filled in as calls return).
+    served_model_versions: dict[str, list[str]] = {}
 
 
 def build_provider(config: RunConfig, dataset: Dataset) -> Provider:
@@ -132,19 +134,46 @@ def execute(
     done = {r.episode_id for r in existing}
     price_of = {} if config.unpriced else model_prices(config, prices)
 
-    store.write_json(
-        store.run_path,
-        RunInfo(
-            run_name=config.run_name,
-            dowbench_version=__version__,
-            git_commit=_git_commit(),
-            provider=provider.name,
-            simulated=provider.simulated,
-            episodes_planned=len(specs),
-            config=config,
-        ),
+    info = RunInfo(
+        run_name=config.run_name,
+        dowbench_version=__version__,
+        git_commit=_git_commit(),
+        provider=provider.name,
+        simulated=provider.simulated,
+        episodes_planned=len(specs),
+        config=config,
+        served_model_versions=store.served_model_versions(),
     )
+    store.write_json(store.run_path, info)
+    try:
+        _run_pending(config, dataset, specs, done, provider, store, price_of, on_episode)
+    finally:
+        # Even when a run stops early, run.json says which model versions actually served.
+        info.served_model_versions = store.served_model_versions()
+        store.write_json(store.run_path, info)
 
+    planned = {s.id for s in specs}
+    records = [r for r in store.load_episodes() if r.episode_id in planned]
+    summary = summarize(
+        records,
+        run_name=config.run_name,
+        baseline_defense=config.baseline_label,
+        threshold=config.success_threshold,
+    )
+    store.write_json(store.summary_path, summary)
+    return summary
+
+
+def _run_pending(
+    config: RunConfig,
+    dataset: Dataset,
+    specs: list[EpisodeSpec],
+    done: set[str],
+    provider: Provider,
+    store: RunStore,
+    price_of: dict[str, ModelPrice],
+    on_episode: Callable[[int, int, EpisodeRecord], None] | None,
+) -> None:
     pending = [s for s in specs if s.id not in done]
     for index, spec in enumerate(pending, start=1):
         attempt = uuid.uuid4().hex
@@ -166,17 +195,6 @@ def execute(
                 f"episode {spec.id} stopped: {record.reason}. Its spend is recorded; "
                 "resume skips it. Fix the cause before resuming."
             )
-
-    planned = {s.id for s in specs}
-    records = [r for r in store.load_episodes() if r.episode_id in planned]
-    summary = summarize(
-        records,
-        run_name=config.run_name,
-        baseline_defense=config.baseline_label,
-        threshold=config.success_threshold,
-    )
-    store.write_json(store.summary_path, summary)
-    return summary
 
 
 def _run_one(

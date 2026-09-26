@@ -348,3 +348,35 @@ def test_real_client_ignores_base_url_and_replay_env(monkeypatch: pytest.MonkeyP
     assert api._http_options.base_url == API_URL
     assert api.api_key == "gemini-key"
     assert api.vertexai is False
+
+
+def test_request_body_is_what_was_sent_including_the_replayed_signature() -> None:
+    parts = [
+        types.Part(
+            function_call=types.FunctionCall(id="c1", name="search", args={"q": "a"}),
+            thought_signature=b"sig",
+        )
+    ]
+    first = GeminiProvider(FakeClient(FakeModels(_response(parts)))).complete(_request())
+    assert first.model_version == "gemini-test-001"
+
+    models = FakeModels(_response([types.Part(text="done")]))
+    follow_up = _request(
+        [
+            Message(role="user", content="hi"),
+            Message(
+                role="assistant", tool_calls=first.tool_calls, provider_data=first.provider_data
+            ),
+            Message(role="tool", content="r", tool_call_id="c1"),
+        ]
+    )
+    body = GeminiProvider(FakeClient(models)).complete(follow_up).request_body
+    sent = models.generate_calls[0]
+    assert body["contents"] == [
+        c.model_dump(mode="json", exclude_none=True) for c in sent["contents"]
+    ]
+    replayed = body["contents"][1]["parts"][0]
+    assert replayed["function_call"]["name"] == "search"
+    assert replayed["thought_signature"] == "c2ln"  # base64 of b"sig"
+    assert body["config"]["system_instruction"] == "Be brief."
+    assert "api_key" not in json.dumps(body) and "http_options" not in body["config"]

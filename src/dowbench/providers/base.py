@@ -74,6 +74,11 @@ class Response(BaseModel):
     latency_s: float = Field(default=0.0, ge=0)
     raw: dict[str, Any] = Field(default_factory=dict)
     provider_data: dict[str, Any] = Field(default_factory=dict, exclude=True)
+    # Model version the provider says served the call, which may differ from the ID asked.
+    model_version: str | None = None
+    # The JSON body the adapter handed to the SDK (no headers, so no key). Persisted, after
+    # sanitizing, to requests.jsonl for auditing (ADR 0009). Never part of the dump.
+    request_body: dict[str, Any] = Field(default_factory=dict, exclude=True)
 
 
 class Provider(Protocol):

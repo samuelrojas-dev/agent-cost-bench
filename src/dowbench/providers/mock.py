@@ -45,6 +45,15 @@ class MockProvider:
         return sum(approx_tokens(part) for part in parts)
 
     def complete(self, request: Request) -> Response:
+        response = self._complete(request)
+        return response.model_copy(
+            update={
+                "model_version": f"{request.model}-simulated",
+                "request_body": {"model": request.model, "messages": len(request.messages)},
+            }
+        )
+
+    def _complete(self, request: Request) -> Response:
         input_tokens = self.count_tokens(request)
         signal = self._active_signal(request.messages)
         tool_results = sum(1 for m in request.messages if m.role == "tool")

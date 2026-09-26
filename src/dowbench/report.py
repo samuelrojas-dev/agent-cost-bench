@@ -62,6 +62,7 @@ def render(info: RunInfo, summary: RunSummary) -> str:
         ["", ""],
         [
             ["Provider", f"`{info.provider}`"],
+            ["Agent under test", f"`{config.agent}`" if config.agent else "built-in loop"],
             ["Models", models],
             ["dowbench", f"{info.dowbench_version}, commit `{info.git_commit or 'unknown'}`"],
             ["Episodes planned", str(info.episodes_planned)],

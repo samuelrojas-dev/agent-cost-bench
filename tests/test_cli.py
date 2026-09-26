@@ -59,3 +59,32 @@ def test_run_rejects_non_finite_or_negative_budget(tmp_path: Path, budget: str) 
     assert result.exit_code == 2
     assert "finite, non-negative" in result.output
     assert not (tmp_path / "pilot-mock").exists()
+
+
+def _unpriced_real_config(tmp_path: Path) -> str:
+    path = tmp_path / "smoke.yaml"
+    path.write_text(
+        "run_name: smoke\nprovider: gemini\nmodels: [some-free-model]\nunpriced: true\n"
+        "attacks: []\nbenign_tasks: [b-refund-policy]\ndefenses: [{name: none}]\n"
+        "ceiling: {max_turns: 2, max_tokens_per_call: 128, max_total_tokens: 400}\n"
+    )
+    return str(path)
+
+
+@pytest.mark.parametrize(
+    ("flags", "message"),
+    [
+        ([], "require --budget-tokens"),
+        (["--budget-usd", "1"], "cannot be checked in USD"),
+        (["--budget-tokens", "399"], "exceeds budget"),
+    ],
+)
+def test_unpriced_real_run_is_capped_in_tokens(
+    tmp_path: Path, flags: list[str], message: str
+) -> None:
+    config = _unpriced_real_config(tmp_path)
+    result = runner.invoke(app, ["run", config, "--out", str(tmp_path), *flags])
+    assert result.exit_code == 2
+    assert message in result.output
+    assert "USD not computed" in result.output
+    assert not (tmp_path / "smoke").exists()  # refused before building the provider

@@ -35,7 +35,7 @@ class AttackOutcome(BaseModel):
     attack_id: str
     repeat: int
     status: str
-    cost_usd: float
+    cost_usd: float | None
     amplification: float | None
     # None when undetermined: censored below the threshold, or no baseline.
     success: bool | None
@@ -76,13 +76,18 @@ def summarize(
     baseline_costs: dict[tuple[str, str], list[float]] = defaultdict(list)
     for r in records:
         # An errored episode's cost is a lower bound: it must not set the yardstick.
-        if r.kind == "benign" and r.defense == baseline_defense and r.status != "errored":
+        if (
+            r.kind == "benign"
+            and r.defense == baseline_defense
+            and r.status != "errored"
+            and r.cost_usd is not None
+        ):
             baseline_costs[(r.model, r.benign_task_id)].append(r.cost_usd)
     baselines = {key: statistics.median(costs) for key, costs in baseline_costs.items()}
 
     def ratio(r: EpisodeRecord) -> float | None:
         base = baselines.get((r.model, r.benign_task_id))
-        return r.cost_usd / base if base else None
+        return r.cost_usd / base if base and r.cost_usd is not None else None
 
     outcomes: list[AttackOutcome] = []
     for r in records:

@@ -147,10 +147,42 @@ def test_existing_run_without_resume_is_refused(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("path", sorted(PILOT.parent.glob("*.yaml")), ids=lambda p: p.name)
-def test_every_shipped_config_is_valid_and_priced(path: Path) -> None:
+def test_every_shipped_config_is_valid_and_bounded(path: Path) -> None:
     config = RunConfig.from_yaml(path)
     specs = plan_episodes(config, load_dataset())
-    assert estimate(config, specs, PriceTable.load(), done=set()).worst_case_usd > 0
+    result = estimate(config, specs, PriceTable.load(), done=set())
+    assert result.worst_case_tokens > 0
+    if config.unpriced:
+        assert result.worst_case_usd is None
+    else:
+        assert result.worst_case_usd is not None and result.worst_case_usd > 0
+
+
+def test_benign_tasks_alone_plan_one_episode_per_model_and_defense() -> None:
+    dataset = load_dataset()
+    task = dataset.benign[0].id
+    config = _config(attacks=[], benign_tasks=[task], defenses=[{"name": "none"}])
+    specs = plan_episodes(config, dataset)
+    assert [(s.kind, s.item_id) for s in specs] == [("benign", task)]
+    with pytest.raises(ValueError, match="unknown benign task"):
+        plan_episodes(_config(benign_tasks=["nope"]), dataset)
+
+
+def test_unpriced_run_counts_tokens_and_never_invents_usd(tmp_path: Path) -> None:
+    config = _config(unpriced=True)
+    dataset = load_dataset()
+    specs = plan_episodes(config, dataset)
+    empty = PriceTable([])  # no price for anything: must not be needed
+    result = estimate(config, specs, empty, done=set())
+    assert result.worst_case_usd is None
+    assert result.max_model_calls == config.ceiling.max_turns * len(specs)
+    summary = execute(
+        config, dataset, provider=build_provider(config, dataset), prices=empty, out_dir=tmp_path
+    )
+    episodes = _rows(tmp_path / config.run_name / "episodes.jsonl")
+    assert episodes and all(e["cost_usd"] is None for e in episodes)
+    assert all(e["usage"]["input_tokens"] > 0 for e in episodes)
+    assert all(o.amplification is None for o in summary.attacks)
 
 
 class _FailingProvider(MockProvider):

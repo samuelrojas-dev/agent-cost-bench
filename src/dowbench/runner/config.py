@@ -26,12 +26,17 @@ class RunConfig(BaseModel):
     provider: str
     models: list[str] = Field(min_length=1)
     attacks: list[str] | Literal["all"] = "all"
+    # Benign tasks to run even when no selected attack needs them (e.g. a one-episode smoke).
+    benign_tasks: list[str] = Field(default_factory=list)
     defenses: list[DefenseSpec] = Field(min_length=1)
     repeats: int = Field(default=1, ge=1)
     seed: int = 0
     system_prompt: str = DEFAULT_SYSTEM_PROMPT
     ceiling: Ceiling = Field(default_factory=Ceiling)
     success_threshold: float = Field(default=5.0, gt=1)
+    # Models without a price entry (e.g. a free tier): no USD is computed, costs stay null,
+    # and the run must be capped in tokens instead (ADR 0008).
+    unpriced: bool = False
 
     @field_validator("provider")
     @classmethod

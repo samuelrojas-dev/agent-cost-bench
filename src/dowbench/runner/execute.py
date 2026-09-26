@@ -36,7 +36,8 @@ class Estimate(BaseModel):
     episodes: int
     pending: int
     worst_case_tokens: int
-    worst_case_usd: float
+    worst_case_usd: float | None  # None for unpriced runs: never invented (ADR 0008)
+    max_model_calls: int  # each may be preceded by one token-count request
     simulated: bool
 
 
@@ -88,13 +89,17 @@ def estimate(
 ) -> Estimate:
     """Worst case under the safety ceiling (ADR 0003): every pending episode spends it all."""
     pending = [s for s in specs if s.id not in done]
-    per_token = {m: p.max_usd_per_token for m, p in model_prices(config, prices).items()}
     budget = config.ceiling.max_total_tokens
+    worst_usd = None
+    if not config.unpriced:
+        per_token = {m: p.max_usd_per_token for m, p in model_prices(config, prices).items()}
+        worst_usd = sum(budget * per_token[s.model] for s in pending)
     return Estimate(
         episodes=len(specs),
         pending=len(pending),
         worst_case_tokens=budget * len(pending),
-        worst_case_usd=sum(budget * per_token[s.model] for s in pending),
+        worst_case_usd=worst_usd,
+        max_model_calls=config.ceiling.max_turns * len(pending),
         simulated=config.simulated,
     )
 
@@ -125,7 +130,7 @@ def execute(
     if existing and not resume:
         raise RunExistsError(f"{store.run_dir} already has episodes; resume or rename the run")
     done = {r.episode_id for r in existing}
-    price_of = model_prices(config, prices)
+    price_of = {} if config.unpriced else model_prices(config, prices)
 
     store.write_json(
         store.run_path,
@@ -149,7 +154,7 @@ def execute(
         )
         record = record.model_copy(
             update={
-                "cost_usd": price_of[spec.model].cost_usd(record.usage),
+                "cost_usd": (price_of[spec.model].cost_usd(record.usage) if price_of else None),
                 "attempt": attempt,
             }
         )

@@ -56,9 +56,15 @@ def _load_config(path: Path, provider: str | None) -> RunConfig:
 
 
 def _print_estimate(result: Estimate) -> None:
+    usd = (
+        "USD not computed (unpriced)"
+        if result.worst_case_usd is None
+        else f"${result.worst_case_usd:.4f}"
+    )
     typer.echo(
         f"episodes: {result.episodes} (pending {result.pending})\n"
-        f"worst case: {result.worst_case_tokens:,} tokens, ${result.worst_case_usd:.4f}"
+        f"worst case: {result.worst_case_tokens:,} tokens, {usd}\n"
+        f"model calls: at most {result.max_model_calls}, each preceded by one token count"
     )
     if result.simulated:
         typer.echo(SIMULATED_NOTICE)
@@ -127,6 +133,14 @@ def run_cmd(
         float | None,
         typer.Option("--budget-usd", help="Refuse to start if the worst case exceeds this"),
     ] = None,
+    budget_tokens: Annotated[
+        int | None,
+        typer.Option(
+            "--budget-tokens",
+            min=0,
+            help="Refuse to start if the worst case exceeds this many tokens (required unpriced)",
+        ),
+    ] = None,
     resume: Annotated[bool, typer.Option(help="Skip episodes already in the run dir")] = True,
 ) -> None:
     """Run the episode matrix and write calls.jsonl, episodes.jsonl and summary.json."""
@@ -148,13 +162,26 @@ def run_cmd(
         typer.echo(str(exc), err=True)
         raise typer.Exit(2) from None
     _print_estimate(worst)
-    if not config.simulated and budget_usd is None:
+    if worst.worst_case_usd is None:
+        if budget_usd is not None:
+            typer.echo("unpriced runs cannot be checked in USD; use --budget-tokens", err=True)
+            raise typer.Exit(2)
+        if not config.simulated and budget_tokens is None:
+            typer.echo("unpriced real runs require --budget-tokens", err=True)
+            raise typer.Exit(2)
+    elif not config.simulated and budget_usd is None:
         typer.echo("real providers require --budget-usd", err=True)
         raise typer.Exit(2)
-    if budget_usd is not None and not worst.worst_case_usd <= budget_usd:
+    elif budget_usd is not None and not worst.worst_case_usd <= budget_usd:
         typer.echo(
             f"worst case ${worst.worst_case_usd:.4f} exceeds budget ${budget_usd:.4f}; "
             "lower the ceiling, the matrix, or raise the budget",
+            err=True,
+        )
+        raise typer.Exit(2)
+    if budget_tokens is not None and worst.worst_case_tokens > budget_tokens:
+        typer.echo(
+            f"worst case {worst.worst_case_tokens:,} tokens exceeds budget {budget_tokens:,}",
             err=True,
         )
         raise typer.Exit(2)

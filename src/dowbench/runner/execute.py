@@ -19,7 +19,9 @@ from dowbench.metering.pricing import ModelPrice, PriceTable
 from dowbench.metrics import RunSummary, summarize
 from dowbench.providers.base import Provider, ProviderSetupError
 from dowbench.providers.mock import MockProvider
+from dowbench.runner.budget import check_budget, spent
 from dowbench.runner.config import RunConfig
+from dowbench.runner.lock import RunLock
 from dowbench.runner.matrix import EpisodeSpec, plan_episodes
 from dowbench.runner.store import EpisodeRecord, RunStore
 
@@ -51,6 +53,9 @@ class RunInfo(BaseModel):
     config: RunConfig
     # Requested model -> versions the provider reported serving (filled in as calls return).
     served_model_versions: dict[str, list[str]] = {}
+    # Everything this run directory has billed so far, across invocations (ADR 0010).
+    spent_tokens: int = 0
+    spent_usd: float | None = None
 
 
 def build_provider(config: RunConfig, dataset: Dataset) -> Provider:
@@ -125,14 +130,45 @@ def execute(
     out_dir: Path,
     resume: bool = True,
     on_episode: Callable[[int, int, EpisodeRecord], None] | None = None,
+    budget_usd: float | None = None,
+    budget_tokens: int | None = None,
 ) -> RunSummary:
+    """Run pending episodes under the run-directory lock and cumulative budget (ADR 0010)."""
     store = RunStore(out_dir / config.run_name)
+    with RunLock(store.run_dir):
+        return _execute_locked(
+            config, dataset, store, provider, prices, resume, on_episode, budget_usd, budget_tokens
+        )
+
+
+def _execute_locked(
+    config: RunConfig,
+    dataset: Dataset,
+    store: RunStore,
+    provider: Provider,
+    prices: PriceTable,
+    resume: bool,
+    on_episode: Callable[[int, int, EpisodeRecord], None] | None,
+    budget_usd: float | None,
+    budget_tokens: int | None,
+) -> RunSummary:
     specs = plan_episodes(config, dataset)
     existing = store.load_episodes()
     if existing and not resume:
         raise RunExistsError(f"{store.run_dir} already has episodes; resume or rename the run")
     done = {r.episode_id for r in existing}
     price_of = {} if config.unpriced else model_prices(config, prices)
+    # Checked here, under the lock, so no caller can skip it and no parallel run can race it.
+    worst = estimate(config, specs, prices, done)
+    already = spent(store, config, prices)
+    check_budget(
+        worst_tokens=worst.worst_case_tokens,
+        worst_usd=worst.worst_case_usd,
+        already=already,
+        budget_usd=budget_usd,
+        budget_tokens=budget_tokens,
+        simulated=config.simulated,
+    )
 
     info = RunInfo(
         run_name=config.run_name,
@@ -143,6 +179,8 @@ def execute(
         episodes_planned=len(specs),
         config=config,
         served_model_versions=store.served_model_versions(),
+        spent_tokens=already.tokens,
+        spent_usd=already.usd,
     )
     store.write_json(store.run_path, info)
     try:
@@ -150,6 +188,8 @@ def execute(
     finally:
         # Even when a run stops early, run.json says which model versions actually served.
         info.served_model_versions = store.served_model_versions()
+        final = spent(store, config, prices)
+        info.spent_tokens, info.spent_usd = final.tokens, final.usd
         store.write_json(store.run_path, info)
 
     planned = {s.id for s in specs}

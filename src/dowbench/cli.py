@@ -15,6 +15,7 @@ from dowbench.defenses import NO_DEFENSE, REGISTRY
 from dowbench.metering.pricing import PriceTable, PricingError
 from dowbench.metrics import RunSummary
 from dowbench.providers.base import ProviderSetupError
+from dowbench.runner.budget import BudgetError, Spend, check_budget, spent
 from dowbench.runner.config import RunConfig
 from dowbench.runner.execute import (
     EpisodeErroredError,
@@ -24,6 +25,7 @@ from dowbench.runner.execute import (
     estimate,
     execute,
 )
+from dowbench.runner.lock import RunLockedError
 from dowbench.runner.matrix import plan_episodes
 from dowbench.runner.store import RunStore
 
@@ -53,6 +55,11 @@ def _load_config(path: Path, provider: str | None) -> RunConfig:
         typer.echo(f"invalid config {path}:\n{exc}", err=True)
         raise typer.Exit(2) from None
     return config
+
+
+def _print_spent(already: Spend) -> None:
+    usd = "" if already.usd is None else f", ${already.usd:.4f}"
+    typer.echo(f"already spent in this run dir: {already.tokens:,} tokens{usd}")
 
 
 def _print_estimate(result: Estimate) -> None:
@@ -116,9 +123,12 @@ def estimate_cmd(
     config = _load_config(config_path, provider)
     dataset = load_dataset()
     specs = plan_episodes(config, dataset)
-    done = {r.episode_id for r in RunStore(out / config.run_name).load_episodes()}
+    store = RunStore(out / config.run_name)
+    done = {r.episode_id for r in store.load_episodes()}
+    prices = PriceTable.load()
     try:
-        _print_estimate(estimate(config, specs, PriceTable.load(), done))
+        _print_estimate(estimate(config, specs, prices, done))
+        _print_spent(spent(store, config, prices))
     except PricingError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(2) from None
@@ -131,14 +141,17 @@ def run_cmd(
     provider: ProviderOption = None,
     budget_usd: Annotated[
         float | None,
-        typer.Option("--budget-usd", help="Refuse to start if the worst case exceeds this"),
+        typer.Option(
+            "--budget-usd",
+            help="Total USD cap for this run dir: spent so far + worst case must fit",
+        ),
     ] = None,
     budget_tokens: Annotated[
         int | None,
         typer.Option(
             "--budget-tokens",
             min=0,
-            help="Refuse to start if the worst case exceeds this many tokens (required unpriced)",
+            help="Total token cap for this run dir: spent + worst case (required unpriced)",
         ),
     ] = None,
     resume: Annotated[bool, typer.Option(help="Skip episodes already in the run dir")] = True,
@@ -153,38 +166,30 @@ def run_cmd(
     dataset = load_dataset()
     prices = PriceTable.load()
     specs = plan_episodes(config, dataset)
-    done = (
-        {r.episode_id for r in RunStore(out / config.run_name).load_episodes()} if resume else set()
-    )
+    store = RunStore(out / config.run_name)
+    done = {r.episode_id for r in store.load_episodes()} if resume else set()
     try:
         worst = estimate(config, specs, prices, done)
+        already = spent(store, config, prices)
     except PricingError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(2) from None
     _print_estimate(worst)
-    if worst.worst_case_usd is None:
-        if budget_usd is not None:
-            typer.echo("unpriced runs cannot be checked in USD; use --budget-tokens", err=True)
-            raise typer.Exit(2)
-        if not config.simulated and budget_tokens is None:
-            typer.echo("unpriced real runs require --budget-tokens", err=True)
-            raise typer.Exit(2)
-    elif not config.simulated and budget_usd is None:
-        typer.echo("real providers require --budget-usd", err=True)
-        raise typer.Exit(2)
-    elif budget_usd is not None and not worst.worst_case_usd <= budget_usd:
-        typer.echo(
-            f"worst case ${worst.worst_case_usd:.4f} exceeds budget ${budget_usd:.4f}; "
-            "lower the ceiling, the matrix, or raise the budget",
-            err=True,
+    _print_spent(already)
+    try:
+        # Early, friendly refusal before building a provider; execute() re-checks under the
+        # run-directory lock, which is the check that cannot be skipped (ADR 0010).
+        check_budget(
+            worst_tokens=worst.worst_case_tokens,
+            worst_usd=worst.worst_case_usd,
+            already=already,
+            budget_usd=budget_usd,
+            budget_tokens=budget_tokens,
+            simulated=config.simulated,
         )
-        raise typer.Exit(2)
-    if budget_tokens is not None and worst.worst_case_tokens > budget_tokens:
-        typer.echo(
-            f"worst case {worst.worst_case_tokens:,} tokens exceeds budget {budget_tokens:,}",
-            err=True,
-        )
-        raise typer.Exit(2)
+    except BudgetError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from None
 
     def progress(index: int, total: int, record: object) -> None:
         typer.echo(f"\r{index}/{total} episodes", nl=index == total)
@@ -203,8 +208,10 @@ def run_cmd(
             out_dir=out,
             resume=resume,
             on_episode=progress,
+            budget_usd=budget_usd,
+            budget_tokens=budget_tokens,
         )
-    except RunExistsError as exc:
+    except (RunExistsError, RunLockedError, BudgetError) as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(2) from None
     except EpisodeErroredError as exc:

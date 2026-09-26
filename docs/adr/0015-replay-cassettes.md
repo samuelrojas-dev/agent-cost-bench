@@ -31,8 +31,10 @@ Add an explicit **record → replay** path. Recording is **always on for real ru
 (no flag); replay is a separate command that makes no network call.
 
 ### 1. Cassette file
-One `cassette.jsonl` per run directory, written on every real run. One row per
-recorded call:
+One `cassette.jsonl` per run directory, written on **every run** (real and mock alike,
+so the mock quickstart can demonstrate `dowbench replay` offline with no key). A replay
+mirrors the source's simulated flag, so replaying a mock cassette stays SIMULATED and is
+never mistaken for a result. One row per recorded call:
 
 ```
 {
@@ -94,12 +96,16 @@ to cover the cassette file** so no key can ride along even after base64.
 - **Real cassettes** are written to the git-ignored `results/` tree and only copied
   to `results/cassettes/` when a result is deliberately published.
 
-### Not "simulated", but not a fresh result either
-Replayed usage is **real recorded data**, so a replay is not `simulated` (the mock
-banner would be wrong). But a replay is also **not an independent new result** —
-publishing it as one would double-count a run. A distinct `replayed=True` marker on
-`run.json` and a report banner ("replayed from a prior real run; not an independent
-result") keep it honest; `simulated` and `replayed` are mutually exclusive.
+### `replayed`, and how it relates to `simulated`
+A replay carries a distinct `replayed=True` marker on `run.json` and a report banner
+("replayed from a prior real run; not an independent result"), because replaying real
+recorded data is **not an independent new result** — publishing it as one would
+double-count a run. `replayed` is orthogonal to `simulated`: a replay mirrors the
+source's `simulated` flag, so replaying a **real** cassette is `simulated=False`,
+`replayed=True` (real numbers, but not a fresh result), while replaying a **mock**
+cassette stays `simulated=True` (synthetic numbers, never a result at all). When both
+are true the report shows the stronger SIMULATED banner; the REPLAYED banner shows only
+for a replayed real run.
 
 ## Alternatives rejected
 - **Reuse `requests.jsonl` + `calls.jsonl`**: neither can drive the loop —
@@ -109,10 +115,14 @@ result") keep it honest; `simulated` and `replayed` are mutually exclusive.
 - **A general VCR/HTTP-record library**: records at the HTTP layer where the key
   lives in headers (ADR 0009) and adds a dependency. Recording the adapter-level
   body/response keeps keys out by construction.
-- **Treat replay as `simulated`**: the numbers are real; the mock banner would
-  misrepresent them. A separate `replayed` marker is honest.
-- **A `--record` flag**: recording is cheap and always useful on a real run, so it
-  is unconditional — one code path, no way to forget it.
+- **Treat every replay as `simulated`**: a real cassette's numbers are real; the mock
+  banner would misrepresent them. Mirroring the source's flag plus a separate
+  `replayed` marker is honest for both real and mock cassettes.
+- **A `--record` flag**: recording is cheap and always useful, so it is unconditional
+  on every run — one code path, no way to forget it.
+- **Record only real runs**: would leave the mock quickstart unable to demonstrate
+  replay offline. Recording the mock too costs nothing and keeps one code path; the
+  mirrored `simulated` flag keeps a replayed mock clearly SIMULATED.
 
 ## Consequences
 - A new offline, deterministic test/CI/demo path over real-shaped data, with no key

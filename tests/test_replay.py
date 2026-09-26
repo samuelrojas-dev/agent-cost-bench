@@ -69,14 +69,14 @@ def _rows(path: Path) -> list[dict[str, Any]]:
 # --- recording ---
 
 
-def test_real_run_writes_a_cassette_but_a_simulated_run_does_not(tmp_path: Path) -> None:
+def test_every_run_writes_a_cassette_real_and_mock_alike(tmp_path: Path) -> None:
     real_dir = _record(tmp_path / "real")
     cassette = _rows(real_dir / "cassette.jsonl")
     assert cassette  # a real (non-simulated) provider records
     kinds = [r["kind"] for r in cassette]
     assert set(kinds) == {"count", "complete"} and kinds[0] == "count"
 
-    # The mock (simulated) writes no cassette: only real runs are recorded (ADR 0015 §1).
+    # The mock records too, so the mock quickstart can demonstrate replay offline (ADR 0015 §1).
     config, dataset = _config(), load_dataset()
     execute(
         config,
@@ -85,7 +85,32 @@ def test_real_run_writes_a_cassette_but_a_simulated_run_does_not(tmp_path: Path)
         prices=PriceTable.load(),
         out_dir=tmp_path / "mock",
     )
-    assert not (tmp_path / "mock" / config.run_name / "cassette.jsonl").exists()
+    assert (tmp_path / "mock" / config.run_name / "cassette.jsonl").exists()
+
+
+def test_replaying_a_mock_cassette_stays_simulated(tmp_path: Path) -> None:
+    # Record with the plain mock (simulated), then replay: the replay must stay SIMULATED so
+    # synthetic numbers are never taken for a result (ADR 0015).
+    from dowbench.report import REPLAYED_BANNER, SIMULATED_BANNER
+    from dowbench.report import load as load_report
+    from dowbench.report import render as render_report
+
+    config, dataset = _config(), load_dataset()
+    execute(
+        config, dataset, provider=MockProvider(), prices=PriceTable.load(), out_dir=tmp_path / "m"
+    )
+    summary = replay_run(
+        tmp_path / "m" / config.run_name,
+        out_dir=tmp_path / "rep",
+        prices=PriceTable.load(),
+        dataset=load_dataset(),
+    )
+    assert summary.simulated is True
+    replayed_dir = tmp_path / "rep" / config.run_name
+    info = json.loads((replayed_dir / "run.json").read_text())
+    assert info["simulated"] is True and info["replayed"] is True
+    report = render_report(*load_report(replayed_dir))
+    assert SIMULATED_BANNER in report and REPLAYED_BANNER not in report  # SIMULATED wins
 
 
 # --- the reproduction guarantee the user asked for ---
@@ -177,24 +202,29 @@ def test_replayprovider_is_offline_and_detects_every_drift_shape() -> None:
                 _interaction("complete", good, response=resp),
             ]
         },
-        "mock",
+        "gemini",
+        simulated=False,
     )
     provider.begin_episode("ep", "a")
-    assert provider.name == "mock" and provider.simulated is False
+    assert provider.name == "gemini" and provider.simulated is False  # mirrors the source run
     assert provider.count_tokens(good) == 3
     assert provider.complete(good).stop_reason == "end_turn"
 
     # A different request at replay time is drift, not a silent stale response.
-    provider = ReplayProvider({"ep": [_interaction("count", good, input_tokens=3)]}, "mock")
+    one = {"ep": [_interaction("count", good, input_tokens=3)]}
+    provider = ReplayProvider(one, "mock", simulated=True)
     provider.begin_episode("ep", "a")
+    assert provider.simulated is True  # a mock cassette replays as SIMULATED
     with pytest.raises(CassetteDriftError, match="drift"):
         provider.count_tokens(_request("changed"))
 
     # An unknown episode, a wrong call kind, and an exhausted cassette are all drift.
-    provider = ReplayProvider({"ep": []}, "mock")
+    provider = ReplayProvider({"ep": []}, "mock", simulated=True)
     with pytest.raises(CassetteDriftError, match="no recorded calls"):
         provider.begin_episode("other", "a")
-    provider = ReplayProvider({"ep": [_interaction("count", good, input_tokens=3)]}, "mock")
+    provider = ReplayProvider(
+        {"ep": [_interaction("count", good, input_tokens=3)]}, "mock", simulated=True
+    )
     provider.begin_episode("ep", "a")
     with pytest.raises(CassetteDriftError, match="drift"):
         provider.complete(good)  # a complete asked where a count was recorded

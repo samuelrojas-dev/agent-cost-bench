@@ -168,9 +168,16 @@ class ReplayProvider:
 
     replaying = True
 
-    def __init__(self, by_episode: Mapping[str, list[Interaction]], provider: str) -> None:
+    def __init__(
+        self,
+        by_episode: Mapping[str, list[Interaction]],
+        provider: str,
+        *,
+        simulated: bool,
+    ) -> None:
         self._by_episode = {ep: deque(items) for ep, items in by_episode.items()}
         self._provider = provider
+        self._simulated = simulated
         self._current: deque[Interaction] | None = None
         self._episode_id = ""
 
@@ -180,7 +187,9 @@ class ReplayProvider:
 
     @property
     def simulated(self) -> bool:
-        return False  # replayed numbers are real recorded data, not simulated (ADR 0015)
+        # Mirror the recorded run: a real cassette replays as real data (marked replayed,
+        # not simulated); a mock cassette stays SIMULATED and is never taken for a result.
+        return self._simulated
 
     def begin_episode(self, episode_id: str, attempt: str) -> None:
         self._episode_id = episode_id
@@ -247,7 +256,7 @@ def replay_run(source_dir: Path, *, out_dir: Path, prices: PriceTable, dataset: 
             "replay covers built-in-loop runs; agent runs meter through the agent, not a "
             "recorded provider (ADR 0012)"
         )
-    provider = ReplayProvider(load_cassette(store), info.provider)
+    provider = ReplayProvider(load_cassette(store), info.provider, simulated=info.simulated)
     return execute(
         info.config, dataset, provider=provider, prices=prices, out_dir=out_dir, resume=False
     )

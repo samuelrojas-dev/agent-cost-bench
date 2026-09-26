@@ -1,5 +1,9 @@
 # dowbench
 
+[![CI](https://github.com/samuelrojas-dev/agent-cost-bench/actions/workflows/ci.yml/badge.svg)](https://github.com/samuelrojas-dev/agent-cost-bench/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
+
 **How much can an attacker make your LLM agent spend, and which defense actually stops it?**
 
 dowbench is a reproducible benchmark of *denial-of-wallet* (DoW) attacks against

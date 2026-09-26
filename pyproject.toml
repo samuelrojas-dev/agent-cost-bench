@@ -11,6 +11,7 @@ dependencies = [
     "pydantic>=2.7,<3",
     "pyyaml>=6.0",
     "typer>=0.12",
+    "google-genai>=2.25,<3",
 ]
 
 [project.optional-dependencies]

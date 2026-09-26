@@ -8,6 +8,11 @@ attacks: [loop-identical-001, flood-repeat-001, reasoning-decoy-001, bloat-appen
 repeats: 1
 seed: 0
 success_threshold: 5.0
+# Gemini free tier (ADR 0014); each countTokens counts as a request while unverified.
+rate_limit:
+  rpm: 12
+  tpm: 250000
+  rpd: 500
 ceiling:
   max_turns: 12
   max_tokens_per_call: 1024

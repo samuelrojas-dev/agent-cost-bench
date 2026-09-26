@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from dowbench.agent.loop import Ceiling
 from dowbench.defenses import NO_DEFENSE, DefenseSpec
+from dowbench.runner.rate_limit import RateLimit
 
 AVAILABLE_PROVIDERS = ("mock", "gemini", "anthropic")
 
@@ -39,6 +40,8 @@ class RunConfig(BaseModel):
     unpriced: bool = False
     # Bring your own agent (ADR 0012): "module:attr" of an object with run(task) -> str.
     agent: str | None = Field(default=None, pattern=r"^[A-Za-z_][\w.]*:[A-Za-z_]\w*$")
+    # Provider rate limit for real runs (ADR 0014); estimate reports it, the runner enforces it.
+    rate_limit: RateLimit | None = None
 
     @field_validator("provider")
     @classmethod

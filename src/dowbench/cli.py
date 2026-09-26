@@ -29,6 +29,7 @@ from dowbench.runner.execute import (
 )
 from dowbench.runner.lock import RunLockedError
 from dowbench.runner.matrix import plan_episodes
+from dowbench.runner.rate_limit import RateLimitReached
 from dowbench.runner.store import RunStore
 from dowbench.sut import load_agent
 
@@ -81,6 +82,13 @@ def _print_estimate(result: Estimate) -> None:
             else "made by the agent and checked after each call"
         )
     )
+    if result.rate_plan is not None:
+        rp = result.rate_plan
+        typer.echo(
+            f"rate limit: {rp.requests:,} requests "
+            f"({rp.generate_requests:,} generate + {rp.count_requests:,} countTokens), "
+            f"at least {rp.minutes:.1f} min across {rp.days} day(s)"
+        )
     if result.simulated:
         typer.echo(SIMULATED_NOTICE)
 
@@ -231,6 +239,9 @@ def run_cmd(
     except EpisodeErroredError as exc:
         typer.echo(f"{exc}\nresults so far: {out / config.run_name}", err=True)
         raise typer.Exit(1) from None
+    except RateLimitReached as exc:
+        typer.echo(f"{exc}\nresults so far: {out / config.run_name}", err=True)
+        raise typer.Exit(3) from None
     _print_summary(summary)
     typer.echo(f"results: {out / config.run_name}")
 

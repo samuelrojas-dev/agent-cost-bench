@@ -23,6 +23,12 @@ from dowbench.runner.budget import check_budget, spent
 from dowbench.runner.config import RunConfig
 from dowbench.runner.lock import RunLock
 from dowbench.runner.matrix import EpisodeSpec, plan_episodes
+from dowbench.runner.rate_limit import (
+    RateLimitedProvider,
+    RateLimiter,
+    RatePlan,
+    plan,
+)
 from dowbench.runner.store import EpisodeRecord, RunStore
 from dowbench.sut import Agent, load_agent, run_agent_episode
 
@@ -43,6 +49,7 @@ class Estimate(BaseModel):
     max_model_calls: int
     counted_before_calls: bool = True  # False for agent runs: checked after calls (ADR 0012)
     simulated: bool
+    rate_plan: RatePlan | None = None  # requests/minutes/days under the rate limit (ADR 0014)
 
 
 class RunInfo(BaseModel):
@@ -106,14 +113,21 @@ def estimate(
     if not config.unpriced:
         per_token = {m: p.max_usd_per_token for m, p in model_prices(config, prices).items()}
         worst_usd = sum(budget * per_token[s.model] for s in pending)
+    generate_calls = turns * len(pending)
+    rate_plan = (
+        plan(config.rate_limit, generate_calls=generate_calls, tokens=budget * len(pending))
+        if config.rate_limit is not None
+        else None
+    )
     return Estimate(
         episodes=len(specs),
         pending=len(pending),
         worst_case_tokens=budget * len(pending),
         worst_case_usd=worst_usd,
-        max_model_calls=turns * len(pending),
+        max_model_calls=generate_calls,
         counted_before_calls=config.agent is None,
         simulated=config.simulated,
+        rate_plan=rate_plan,
     )
 
 
@@ -198,6 +212,12 @@ def _execute_locked(
         simulated=config.simulated,
     )
 
+    # Rate limiting applies to real providers; the mock has no quota (ADR 0014).
+    limiter = None
+    if config.rate_limit is not None and provider is not None and not provider.simulated:
+        limiter = RateLimiter(config.rate_limit)
+        provider = RateLimitedProvider(provider, limiter)
+
     info = RunInfo(
         run_name=config.run_name,
         dowbench_version=__version__,
@@ -212,7 +232,9 @@ def _execute_locked(
     )
     store.write_json(store.run_path, info)
     try:
-        _run_pending(config, dataset, specs, done, provider, agent, store, price_of, on_episode)
+        _run_pending(
+            config, dataset, specs, done, provider, agent, store, price_of, on_episode, limiter
+        )
     finally:
         # Even when a run stops early, run.json says which model versions actually served.
         info.served_model_versions = store.served_model_versions()
@@ -242,9 +264,15 @@ def _run_pending(
     store: RunStore,
     price_of: dict[str, ModelPrice],
     on_episode: Callable[[int, int, EpisodeRecord], None] | None,
+    limiter: RateLimiter | None,
 ) -> None:
     pending = [s for s in specs if s.id not in done]
+    # Worst-case requests for one episode: each of its calls is a generate + a countTokens.
+    turns = config.ceiling.max_turns + (1 if config.agent else 0)
+    per_episode_requests = turns * 2
     for index, spec in enumerate(pending, start=1):
+        if limiter is not None:
+            limiter.reserve_episode(per_episode_requests)  # stop between episodes on RPD
         attempt = uuid.uuid4().hex
         context = {"episode_id": spec.id, "model": spec.model, "attempt": attempt}
         record = _run_one(

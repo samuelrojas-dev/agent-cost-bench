@@ -37,7 +37,7 @@ anthropic = ["anthropic>=1.8,<2"]
 dev = [
     "dowbench[gemini,anthropic]",
     "pytest>=8",
-    "ruff>=0.6",
+    "ruff>=0.16,<0.17",
     "mypy>=1.11",
     "types-PyYAML",
 ]

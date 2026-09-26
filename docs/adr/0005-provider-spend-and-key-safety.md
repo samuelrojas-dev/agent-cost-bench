@@ -20,7 +20,8 @@ more above a prompt size; and every install pulled a provider SDK that only real
    and recorded once. `google-genai` 2.25 does not retry unless `retry_options` is set
    (read in `_api_client.retry_args`); the adapter leaves it unset and a test pins that.
    A failed call stops the run; `run --resume` continues from the last recorded episode.
-3. **Timeout** of 120 s per request, so a hung call cannot block a run forever.
+3. **Timeout** so a hung call cannot block a run forever. Amended by ADR 0006: 600 s, not
+   120 s, because a timeout that fires mid-generation leaves a billed, unrecorded call.
 4. **Price tiers**: every real price entry must declare `max_prompt_tokens`, the upper edge
    of the tier its rates describe (the context window if pricing is flat). `estimate`
    and `execute` refuse a config whose `ceiling.max_total_tokens` exceeds it: under ADR 0003
@@ -34,6 +35,7 @@ more above a prompt size; and every install pulled a provider SDK that only real
 - Retries with backoff for 429 on free tiers: convenient, but risks unrecorded double
   billing. Resume covers the same need.
 - A configurable timeout: no current need; a constant is one line to change.
+- Retries were also rejected for Anthropic, whose SDK retries twice by default (ADR 0006).
 
 ## Consequences
 - A timed-out call may still be billed without being recorded. The run stops at that point,

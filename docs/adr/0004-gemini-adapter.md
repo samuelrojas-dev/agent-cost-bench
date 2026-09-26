@@ -18,9 +18,8 @@ not a benchmark result) also showed that Gemini 3 rejects a follow-up turn whose
   prompt + UTF-8 bytes of the tool declarations as JSON + 64 tokens of template margin.
   Over-counting only makes the ceiling censor earlier; the post-call check of ADR 0003
   still catches any residual under-count, bounded by one call.
-- `ToolCall.provider_data` carries opaque per-provider data (here the thought signature)
-  back to the same provider. It is excluded from serialization and from `signature()`, so
-  loop detection and the mock provider are unaffected.
+- ~~`ToolCall.provider_data` carries the thought signature back.~~ Superseded by ADR 0006:
+  the whole model turn is replayed verbatim through message-level `provider_data`.
 - Usage mapping (ADR 0002): `input = prompt − cached + tool_use_prompt`,
   `cache_read = cached`, `output = candidates`, `reasoning = thoughts`; the adapter fails if
   the sum differs from `total_token_count` or an unknown usage field appears.

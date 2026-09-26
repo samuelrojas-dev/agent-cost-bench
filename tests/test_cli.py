@@ -47,6 +47,6 @@ def test_run_refuses_when_worst_case_exceeds_budget(tmp_path: Path) -> None:
 
 
 def test_run_rejects_unavailable_provider(tmp_path: Path) -> None:
-    result = runner.invoke(app, ["run", PILOT, "--provider", "gemini", "--out", str(tmp_path)])
+    result = runner.invoke(app, ["run", PILOT, "--provider", "nope", "--out", str(tmp_path)])
     assert result.exit_code == 2
     assert "not available yet" in result.output

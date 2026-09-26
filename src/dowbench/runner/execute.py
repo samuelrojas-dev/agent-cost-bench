@@ -47,6 +47,10 @@ class RunInfo(BaseModel):
 def build_provider(config: RunConfig, dataset: Dataset) -> Provider:
     if config.provider == "mock":
         return MockProvider([(a.payload, a.expected_signal) for a in dataset.attacks])
+    if config.provider == "gemini":
+        from dowbench.providers.gemini import GeminiProvider
+
+        return GeminiProvider()
     raise ValueError(f"provider {config.provider!r} is not available yet")
 
 

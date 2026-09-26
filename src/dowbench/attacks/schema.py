@@ -12,8 +12,8 @@ from dowbench.agent.tools import TOOL_NAMES
 
 DATA_DIR = Path(__file__).with_name("data")
 
-Family = Literal["tool_loop", "output_flood", "reasoning_bomb", "context_bloat"]
-Vector = Literal["user_prompt", "tool_result"]
+Family = Literal["tool_loop", "output_flood", "reasoning_bomb", "context_bloat", "mcp_chain"]
+Vector = Literal["user_prompt", "tool_result", "tool_description"]
 # What a susceptible agent does when the attack works. The mock provider imitates it.
 Signal = Literal[
     "repeated_identical_calls",
@@ -53,10 +53,11 @@ class Attack(BaseModel):
 
     @model_validator(mode="after")
     def _target_tool_matches_vector(self) -> Attack:
-        if self.vector == "tool_result" and self.target_tool is None:
-            raise ValueError(f"attack {self.id}: vector tool_result needs target_tool")
-        if self.vector == "user_prompt" and self.target_tool is not None:
-            raise ValueError(f"attack {self.id}: vector user_prompt takes no target_tool")
+        needs_target = self.vector in ("tool_result", "tool_description")
+        if needs_target and self.target_tool is None:
+            raise ValueError(f"attack {self.id}: vector {self.vector} needs target_tool")
+        if not needs_target and self.target_tool is not None:
+            raise ValueError(f"attack {self.id}: vector {self.vector} takes no target_tool")
         if self.target_tool is not None and self.target_tool not in TOOL_NAMES:
             raise ValueError(f"attack {self.id}: unknown tool {self.target_tool!r}")
         return self

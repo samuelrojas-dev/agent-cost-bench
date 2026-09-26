@@ -13,7 +13,7 @@ from collections.abc import Sequence
 
 from dowbench.attacks.schema import Signal
 from dowbench.metering.usage import Usage
-from dowbench.providers.base import Message, Request, Response, StopReason, ToolCall
+from dowbench.providers.base import Request, Response, StopReason, ToolCall
 
 
 def approx_tokens(text: str) -> int:
@@ -55,7 +55,7 @@ class MockProvider:
 
     def _complete(self, request: Request) -> Response:
         input_tokens = self.count_tokens(request)
-        signal = self._active_signal(request.messages)
+        signal = self._active_signal(request)
         tool_results = sum(1 for m in request.messages if m.role == "tool")
 
         if signal == "long_output":
@@ -73,9 +73,11 @@ class MockProvider:
         reasoning = request.max_tokens - answer if signal == "long_reasoning" else 0
         return self._answer(input_tokens, answer, reasoning=reasoning)
 
-    def _active_signal(self, messages: Sequence[Message]) -> Signal | None:
+    def _active_signal(self, request: Request) -> Signal | None:
+        texts = [m.content for m in request.messages]
+        texts += [tool.description for tool in request.tools]
         for marker, signal in self._triggers:
-            if any(marker in m.content for m in messages):
+            if any(marker in text for text in texts):
                 return signal
         return None
 

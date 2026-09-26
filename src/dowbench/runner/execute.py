@@ -283,7 +283,11 @@ def _run_one(
             prompt = f"{prompt}\n\n{attack.rendered_payload}"
         else:
             assert attack.target_tool is not None  # guaranteed by the schema
-            injection = Injection(attack.target_tool, attack.rendered_payload)
+            injection = Injection(
+                attack.target_tool,
+                attack.rendered_payload,
+                where="description" if attack.vector == "tool_description" else "result",
+            )
 
     toolbox = ToolBox(task.tool, injection)
     if agent is not None:

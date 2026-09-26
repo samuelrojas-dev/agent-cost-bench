@@ -1,0 +1,19 @@
+{
+  "id": "msg_fixture_tool_use",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-haiku-4-5",
+  "content": [
+    {"type": "text", "text": "Fetching the report."},
+    {"type": "tool_use", "id": "toolu_fixture_1", "name": "fetch_doc", "input": {"doc_id": "q3-report", "page": 1}}
+  ],
+  "stop_reason": "tool_use",
+  "stop_sequence": null,
+  "usage": {
+    "input_tokens": 812,
+    "output_tokens": 64,
+    "cache_read_input_tokens": 0,
+    "cache_creation_input_tokens": 0,
+    "service_tier": "standard"
+  }
+}

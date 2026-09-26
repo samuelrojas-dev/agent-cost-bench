@@ -122,7 +122,12 @@ def run_episode(
             return finish("completed", text=response.text)
 
         messages.append(
-            Message(role="assistant", content=response.text, tool_calls=response.tool_calls)
+            Message(
+                role="assistant",
+                content=response.text,
+                tool_calls=response.tool_calls,
+                native=response.native,
+            )
         )
         for call in response.tool_calls:
             state.tool_calls.append(call)
@@ -132,4 +137,6 @@ def run_episode(
                 if isinstance(filtered, Abort):
                     return finish("aborted", f"{defense.name}: {filtered.reason}")
                 result = filtered
-            messages.append(Message(role="tool", content=result, tool_call_id=call.id))
+            messages.append(
+                Message(role="tool", content=result, tool_call_id=call.id, tool_name=call.name)
+            )

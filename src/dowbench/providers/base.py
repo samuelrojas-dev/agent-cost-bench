@@ -25,11 +25,30 @@ class ToolCall(BaseModel):
         return f"{self.name}:{json.dumps(self.arguments, sort_keys=True)}"
 
 
+class UsageMappingError(ValueError):
+    """Provider usage that cannot be mapped to ``Usage`` without guessing (ADR 0002)."""
+
+
+class NativeContent(BaseModel):
+    """An assistant turn exactly as the provider returned it, as JSON.
+
+    Providers require some blocks to be sent back unchanged (Claude thinking blocks,
+    Gemini thought signatures), so adapters replay this instead of rebuilding the turn.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    provider: str
+    content: list[dict[str, Any]]
+
+
 class Message(BaseModel):
     role: Role
     content: str = ""
     tool_calls: list[ToolCall] = Field(default_factory=list)
     tool_call_id: str | None = None
+    tool_name: str | None = None
+    native: NativeContent | None = None
 
 
 class ToolSpec(BaseModel):
@@ -55,6 +74,7 @@ class Response(BaseModel):
     usage: Usage
     latency_s: float = Field(default=0.0, ge=0)
     raw: dict[str, Any] = Field(default_factory=dict)
+    native: NativeContent | None = None
 
 
 class Provider(Protocol):

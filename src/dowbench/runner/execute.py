@@ -15,7 +15,9 @@ from dowbench.attacks.schema import Dataset
 from dowbench.defenses import build_defenses
 from dowbench.metering.pricing import PriceTable
 from dowbench.metrics import RunSummary, summarize
+from dowbench.providers.anthropic_api import AnthropicProvider
 from dowbench.providers.base import Provider
+from dowbench.providers.gemini_api import GeminiProvider
 from dowbench.providers.mock import MockProvider
 from dowbench.runner.config import RunConfig
 from dowbench.runner.matrix import EpisodeSpec, plan_episodes
@@ -45,9 +47,14 @@ class RunInfo(BaseModel):
 
 
 def build_provider(config: RunConfig, dataset: Dataset) -> Provider:
+    """Real providers read their API key from the environment (see .env.example)."""
     if config.provider == "mock":
         return MockProvider([(a.payload, a.expected_signal) for a in dataset.attacks])
-    raise ValueError(f"provider {config.provider!r} is not available yet")
+    if config.provider == "anthropic":
+        return AnthropicProvider()
+    if config.provider == "gemini":
+        return GeminiProvider()
+    raise ValueError(f"provider {config.provider!r} is not available")
 
 
 def estimate(

@@ -45,7 +45,7 @@ def test_config_requires_exactly_one_baseline() -> None:
 
 def test_config_rejects_unavailable_provider() -> None:
     with pytest.raises(ValidationError, match="not available yet"):
-        _config(provider="gemini")
+        _config(provider="openai")
 
 
 def test_episode_ids_are_stable_and_sensitive_to_config() -> None:

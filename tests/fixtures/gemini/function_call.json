@@ -1,0 +1,24 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "role": "model",
+        "parts": [
+          {"text": "planning", "thought": true},
+          {"functionCall": {"name": "fetch_doc", "args": {"doc_id": "q3-report", "page": 1}}, "thoughtSignature": "Zml4dHVyZS1zaWc="}
+        ]
+      },
+      "finishReason": "STOP",
+      "index": 0
+    }
+  ],
+  "usageMetadata": {
+    "promptTokenCount": 500,
+    "cachedContentTokenCount": 100,
+    "candidatesTokenCount": 20,
+    "thoughtsTokenCount": 80,
+    "toolUsePromptTokenCount": 0,
+    "totalTokenCount": 600
+  },
+  "modelVersion": "gemini-2.5-flash"
+}

@@ -47,6 +47,19 @@ def test_run_refuses_when_worst_case_exceeds_budget(tmp_path: Path) -> None:
 
 
 def test_run_rejects_unavailable_provider(tmp_path: Path) -> None:
-    result = runner.invoke(app, ["run", PILOT, "--provider", "gemini", "--out", str(tmp_path)])
+    result = runner.invoke(app, ["run", PILOT, "--provider", "openai", "--out", str(tmp_path)])
     assert result.exit_code == 2
     assert "not available yet" in result.output
+
+
+def test_real_provider_requires_budget_before_any_call(tmp_path: Path) -> None:
+    config = tmp_path / "gemini.yaml"
+    config.write_text(
+        "run_name: gemini-pilot\nprovider: gemini\nmodels: [gemini-2.5-flash-lite]\n"
+        "defenses:\n  - name: none\n",
+        encoding="utf-8",
+    )
+    result = runner.invoke(app, ["run", str(config), "--out", str(tmp_path)])
+    assert result.exit_code == 2
+    assert "require --budget-usd" in result.output
+    assert not (tmp_path / "gemini-pilot").exists()

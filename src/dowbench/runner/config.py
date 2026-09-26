@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from dowbench.agent.loop import Ceiling
 from dowbench.defenses import NO_DEFENSE, DefenseSpec
 
-AVAILABLE_PROVIDERS = ("mock",)
+AVAILABLE_PROVIDERS = ("mock", "anthropic", "gemini")
 
 DEFAULT_SYSTEM_PROMPT = (
     "You are a helpful assistant for an internal knowledge base. Use the tools to find "

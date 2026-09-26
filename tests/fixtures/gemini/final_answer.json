@@ -1,0 +1,15 @@
+{
+  "candidates": [
+    {
+      "content": {"role": "model", "parts": [{"text": "Revenue grew 4%."}]},
+      "finishReason": "STOP",
+      "index": 0
+    }
+  ],
+  "usageMetadata": {
+    "promptTokenCount": 700,
+    "candidatesTokenCount": 12,
+    "totalTokenCount": 712
+  },
+  "modelVersion": "gemini-2.5-flash"
+}

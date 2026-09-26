@@ -44,6 +44,7 @@ dowbench list attacks                        # the seed attacks and their source
 dowbench list defenses                       # the defenses under test
 dowbench estimate configs/pilot.yaml         # worst-case tokens and USD, no calls made
 dowbench run configs/pilot.yaml              # writes results/raw/pilot-mock/
+dowbench report results/raw/pilot-mock       # Markdown report of that run
 ```
 
 Mock runs are labeled `SIMULATED`. Their numbers show that the pipeline works; they are
@@ -116,6 +117,10 @@ payloads for four families, each crediting where the pattern is described.
 | `episodes.jsonl` | one row per episode: status, usage, cost |
 | `summary.json` | ASR, amplification, overhead per model and defense |
 
+`dowbench report <run dir>` turns `run.json` and `summary.json` into a Markdown report
+with the exact config needed to reproduce the run. It makes no calls and always renders
+the same text for the same files.
+
 ## Extending
 
 - **An attack** is a YAML entry in `seed.yaml`: `id`, `family`, `vector`
@@ -140,7 +145,7 @@ python -m pytest && ruff check . && ruff format --check . && mypy src tests
 Every non-obvious decision is a short ADR in [`docs/adr/`](docs/adr/): the metric,
 the provider interface, the safety ceiling, each adapter, spend and key safety, the
 findings of an adversarial review of the budget guard, unpriced runs, request auditing,
-and the cumulative budget.
+the cumulative budget, and the report.
 
 ## License
 

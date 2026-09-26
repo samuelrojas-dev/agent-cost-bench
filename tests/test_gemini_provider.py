@@ -12,13 +12,19 @@ from google.genai import types
 
 from dowbench.attacks.schema import load_dataset
 from dowbench.metering.usage import Usage
-from dowbench.providers.base import Message, ProviderSetupError, Request, ToolCall, ToolSpec
+from dowbench.providers.base import (
+    Message,
+    ProviderSetupError,
+    Request,
+    ToolCall,
+    ToolSpec,
+    UsageMappingError,
+)
 from dowbench.providers.gemini import (
     API_URL,
     REQUEST_TIMEOUT_S,
     TEMPLATE_MARGIN_TOKENS,
     GeminiProvider,
-    UsageMappingError,
     map_usage,
     to_contents,
 )

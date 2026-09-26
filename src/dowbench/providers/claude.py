@@ -31,13 +31,10 @@ from dowbench.providers.base import (
     Response,
     StopReason,
     ToolCall,
+    UsageMappingError,
 )
 
 API_URL = "https://api.anthropic.com"
-
-
-class UsageMappingError(ValueError):
-    """The provider's usage report does not match the mapping in ADR 0002."""
 
 
 # A new, non-empty usage field fails loudly so an SDK or API change cannot skew costs.
@@ -198,6 +195,11 @@ class AnthropicProvider:
         message = self._client.messages.create(max_tokens=request.max_tokens, **_common(request))
         latency = time.perf_counter() - start
 
+        raw_usage = message.usage.model_dump(mode="json", exclude_none=True)
+        try:
+            usage = map_usage(message.usage)
+        except UsageMappingError as exc:
+            raise UsageMappingError(str(exc), raw_usage) from exc
         blocks: list[ContentBlock] = list(message.content)
         text = "".join(b.text for b in blocks if b.type == "text")
         tool_calls = [
@@ -209,10 +211,10 @@ class AnthropicProvider:
             text=text,
             tool_calls=tool_calls,
             stop_reason=_STOP_REASONS.get(message.stop_reason, "other"),
-            usage=map_usage(message.usage),
+            usage=usage,
             latency_s=latency,
             raw={
-                "usage": message.usage.model_dump(mode="json", exclude_none=True),
+                "usage": raw_usage,
                 "model": message.model,
                 "stop_reason": message.stop_reason,
                 "id": message.id,

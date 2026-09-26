@@ -17,6 +17,7 @@ from dowbench.metrics import RunSummary
 from dowbench.providers.base import ProviderSetupError
 from dowbench.runner.config import RunConfig
 from dowbench.runner.execute import (
+    EpisodeErroredError,
     Estimate,
     RunExistsError,
     build_provider,
@@ -179,5 +180,8 @@ def run_cmd(
     except RunExistsError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(2) from None
+    except EpisodeErroredError as exc:
+        typer.echo(f"{exc}\nresults so far: {out / config.run_name}", err=True)
+        raise typer.Exit(1) from None
     _print_summary(summary)
     typer.echo(f"results: {out / config.run_name}")

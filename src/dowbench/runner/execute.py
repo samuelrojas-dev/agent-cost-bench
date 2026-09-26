@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import functools
 import subprocess
+import uuid
 from collections.abc import Callable
 from pathlib import Path
 
@@ -24,6 +26,10 @@ from dowbench.runner.store import EpisodeRecord, RunStore
 
 class RunExistsError(RuntimeError):
     pass
+
+
+class EpisodeErroredError(RuntimeError):
+    """A billed call could not be priced; the run stops after recording it (ADR 0007)."""
 
 
 class Estimate(BaseModel):
@@ -136,11 +142,25 @@ def execute(
 
     pending = [s for s in specs if s.id not in done]
     for index, spec in enumerate(pending, start=1):
-        record, calls = _run_one(config, dataset, spec, provider)
-        record = record.model_copy(update={"cost_usd": price_of[spec.model].cost_usd(record.usage)})
-        store.append(record, calls)
+        attempt = uuid.uuid4().hex
+        context = {"episode_id": spec.id, "model": spec.model, "attempt": attempt}
+        record = _run_one(
+            config, dataset, spec, provider, functools.partial(store.append_call, context)
+        )
+        record = record.model_copy(
+            update={
+                "cost_usd": price_of[spec.model].cost_usd(record.usage),
+                "attempt": attempt,
+            }
+        )
+        store.append_episode(record)
         if on_episode is not None:
             on_episode(index, len(pending), record)
+        if record.status == "errored":
+            raise EpisodeErroredError(
+                f"episode {spec.id} stopped: {record.reason}. Its spend is recorded; "
+                "resume skips it. Fix the cause before resuming."
+            )
 
     planned = {s.id for s in specs}
     records = [r for r in store.load_episodes() if r.episode_id in planned]
@@ -155,8 +175,12 @@ def execute(
 
 
 def _run_one(
-    config: RunConfig, dataset: Dataset, spec: EpisodeSpec, provider: Provider
-) -> tuple[EpisodeRecord, list[CallRecord]]:
+    config: RunConfig,
+    dataset: Dataset,
+    spec: EpisodeSpec,
+    provider: Provider,
+    on_call: Callable[[CallRecord], None],
+) -> EpisodeRecord:
     task = dataset.benign_task(spec.benign_task_id)
     prompt = task.prompt
     injection = None
@@ -176,8 +200,9 @@ def _run_one(
         toolbox=ToolBox(task.tool, injection),
         defenses=build_defenses(spec.defense),
         ceiling=config.ceiling,
+        on_call=on_call,
     )
-    record = EpisodeRecord(
+    return EpisodeRecord(
         episode_id=spec.id,
         model=spec.model,
         defense=spec.defense.display,
@@ -192,4 +217,3 @@ def _run_one(
         cost_usd=0.0,
         simulated=provider.simulated,
     )
-    return record, result.calls

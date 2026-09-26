@@ -13,11 +13,17 @@ from anthropic.types import Usage as ApiUsage
 
 from dowbench.attacks.schema import load_dataset
 from dowbench.metering.usage import Usage
-from dowbench.providers.base import Message, ProviderSetupError, Request, ToolCall, ToolSpec
+from dowbench.providers.base import (
+    Message,
+    ProviderSetupError,
+    Request,
+    ToolCall,
+    ToolSpec,
+    UsageMappingError,
+)
 from dowbench.providers.claude import (
     API_URL,
     AnthropicProvider,
-    UsageMappingError,
     map_usage,
     to_messages,
 )

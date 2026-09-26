@@ -23,12 +23,8 @@ from dowbench.providers.base import (
     Response,
     StopReason,
     ToolCall,
+    UsageMappingError,
 )
-
-
-class UsageMappingError(ValueError):
-    """The provider's usage report does not match the mapping in ADR 0002."""
-
 
 # Fields of GenerateContentResponseUsageMetadata this adapter understands. A new, non-empty
 # field fails loudly so an SDK or API change cannot silently skew costs (ADR 0002).
@@ -250,14 +246,19 @@ class GeminiProvider:
                     )
                 )
         metadata = response.usage_metadata
+        raw_usage = metadata.model_dump(mode="json", exclude_none=True) if metadata else {}
+        try:
+            usage = map_usage(metadata)
+        except UsageMappingError as exc:
+            raise UsageMappingError(str(exc), raw_usage) from exc
         return Response(
             text="".join(text),
             tool_calls=tool_calls,
             stop_reason=_stop_reason(response, tool_calls),
-            usage=map_usage(metadata),
+            usage=usage,
             latency_s=latency,
             raw={
-                "usage": metadata.model_dump(mode="json", exclude_none=True) if metadata else {},
+                "usage": raw_usage,
                 "model_version": response.model_version,
                 "finish_reason": str(candidate.finish_reason) if candidate else None,
             },

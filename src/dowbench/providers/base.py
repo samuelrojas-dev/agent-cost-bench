@@ -17,6 +17,17 @@ class ProviderSetupError(RuntimeError):
     """The provider cannot be built: missing optional dependency or credentials."""
 
 
+class UsageMappingError(ValueError):
+    """A billed response whose usage cannot be mapped or priced (ADR 0002, ADR 0007).
+
+    ``raw_usage`` keeps the provider's usage object so the spend is still recorded.
+    """
+
+    def __init__(self, message: str, raw_usage: dict[str, Any] | None = None) -> None:
+        super().__init__(message)
+        self.raw_usage = raw_usage or {}
+
+
 class ToolCall(BaseModel):
     model_config = ConfigDict(frozen=True)
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -11,13 +11,14 @@ from dowbench.agent.state import EpisodeState
 from dowbench.agent.tools import ToolBox
 from dowbench.defenses.base import Abort, Defense
 from dowbench.metering.usage import Usage
-from dowbench.providers.base import Message, Provider, Request, StopReason
+from dowbench.providers.base import Message, Provider, Request, StopReason, UsageMappingError
 
 EpisodeStatus = Literal[
     "completed",  # the model gave a final answer
     "truncated",  # the model hit max_tokens on its final call
     "aborted",  # a defense stopped the episode
     "censored",  # the safety ceiling stopped the episode; cost is a lower bound
+    "errored",  # a billed call could not be priced; cost is a lower bound (ADR 0007)
 ]
 
 
@@ -39,6 +40,7 @@ class CallRecord(BaseModel):
     # The provider's usage object as returned, kept so costs can be re-derived and the
     # mapping of ADR 0002 audited without a new paid run.
     raw_usage: dict[str, Any] = Field(default_factory=dict)
+    error: str | None = None
 
 
 class EpisodeResult(BaseModel):
@@ -59,10 +61,18 @@ def run_episode(
     toolbox: ToolBox,
     defenses: Sequence[Defense],
     ceiling: Ceiling,
+    on_call: Callable[[CallRecord], None] | None = None,
 ) -> EpisodeResult:
+    """Run one episode. ``on_call`` sees every billed call as soon as it returns, so a
+    later failure cannot lose it (ADR 0007)."""
     messages = [Message(role="user", content=user_prompt)]
     state = EpisodeState()
     calls: list[CallRecord] = []
+
+    def record(call: CallRecord) -> None:
+        calls.append(call)
+        if on_call is not None:
+            on_call(call)
 
     def finish(status: EpisodeStatus, reason: str | None = None, text: str = "") -> EpisodeResult:
         return EpisodeResult(
@@ -89,9 +99,13 @@ def run_episode(
             rewritten = defense.before_call(request, state)
             if isinstance(rewritten, Abort):
                 return finish("aborted", f"{defense.name}: {rewritten.reason}")
+            if rewritten.model != model or rewritten.tools != toolbox.specs:
+                raise ValueError(f"{defense.name} changed the model or tools; costs would be wrong")
             request = rewritten
 
         input_tokens = provider.count_tokens(request)
+        if input_tokens is None and not provider.simulated:
+            raise ValueError(f"{provider.name} cannot count tokens; the ceiling would not hold")
         if (
             input_tokens is not None
             and state.usage.total_tokens + input_tokens + request.max_tokens
@@ -99,13 +113,33 @@ def run_episode(
         ):
             return finish("censored", f"ceiling: {ceiling.max_total_tokens} tokens")
 
-        response = provider.complete(request)
-        raw_usage = response.raw.get("usage")
-        if not provider.simulated and not raw_usage:
-            raise ValueError(f"{provider.name} returned no raw usage; results must be auditable")
+        mapped = Usage()  # what is known of a billed call that then fails validation
+        try:
+            response = provider.complete(request)
+            raw_usage = response.raw.get("usage")
+            if not provider.simulated and not raw_usage:
+                mapped = response.usage
+                raise UsageMappingError(f"{provider.name} returned no raw usage")
+        except UsageMappingError as exc:
+            # Billed but unpriceable: record what the provider reported and stop (ADR 0007).
+            state.turns += 1
+            state.usage += mapped
+            record(
+                CallRecord(
+                    turn=state.turns,
+                    max_tokens=request.max_tokens,
+                    stop_reason="other",
+                    usage=mapped,
+                    tool_calls=0,
+                    latency_s=0.0,
+                    raw_usage=exc.raw_usage,
+                    error=str(exc),
+                )
+            )
+            return finish("errored", f"{provider.name}: {exc}")
         state.turns += 1
         state.usage += response.usage
-        calls.append(
+        record(
             CallRecord(
                 turn=state.turns,
                 max_tokens=request.max_tokens,

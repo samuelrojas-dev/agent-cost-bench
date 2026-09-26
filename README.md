@@ -59,12 +59,13 @@ which return an attack) and a meter.
 ```python
 from dowbench.sut import Task
 
+
 class MyAgent:
     def run(self, task: Task) -> str:
         # task.prompt, task.system_prompt, task.tools, task.max_tokens_per_call
-        response = my_model_call(task)          # your SDK call
-        task.meter.record(response)             # every call: this is how cost is measured
-        ...                                     # call task.tool("search")(query=...) etc.
+        response = my_model_call(task)  # your SDK call
+        task.meter.record(response)  # every call: this is how cost is measured
+        ...  # call task.tool("search")(query=...) etc.
         return final_answer
 ```
 

@@ -34,6 +34,12 @@ def test_wilson_interval_known_values() -> None:
     assert wilson_interval(0, 0) == (0.0, 1.0)
 
 
+def test_wilson_interval_reaches_bounds_at_extremes() -> None:
+    # Found by hypothesis: float rounding left the upper bound at 0.9999999999999999.
+    assert wilson_interval(53, 53)[1] == 1.0
+    assert wilson_interval(0, 53)[0] == 0.0
+
+
 def test_amplification_uses_undefended_baseline_for_every_defense() -> None:
     records = [
         _record(episode_id="b-none", cost_usd=2.0),

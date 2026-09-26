@@ -38,8 +38,12 @@ class ModelPrice(BaseModel):
     simulated: bool = False
 
     @model_validator(mode="after")
-    def _real_prices_declare_tier(self) -> ModelPrice:
-        if not self.simulated and self.max_prompt_tokens is None:
+    def _real_prices_are_sourced(self) -> ModelPrice:
+        if self.simulated:
+            return self
+        if not self.source.startswith("https://"):
+            raise ValueError(f"{self.provider}/{self.model}: real prices need an https source URL")
+        if self.max_prompt_tokens is None:
             raise ValueError(
                 f"{self.provider}/{self.model}: real prices need max_prompt_tokens (ADR 0005)"
             )

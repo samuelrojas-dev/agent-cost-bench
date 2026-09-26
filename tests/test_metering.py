@@ -15,7 +15,7 @@ def _price(**overrides: object) -> ModelPrice:
         "output_per_mtok": 5.0,
         "cache_read_per_mtok": 0.1,
         "cache_write_per_mtok": 1.25,
-        "source": "test",
+        "source": "https://example.com/pricing",
         "retrieved": dt.date(2026, 9, 25),
         "max_prompt_tokens": 200_000,
     }
@@ -57,16 +57,20 @@ def test_max_usd_per_token() -> None:
     assert _price().max_usd_per_token == pytest.approx(5.0 / 1_000_000)
 
 
-def test_default_table_real_entries_cite_an_official_source() -> None:
-    table = PriceTable.load()
+def test_default_table_loads_under_the_sourcing_rules() -> None:
+    table = PriceTable.load()  # every entry is validated on load
     assert table.get("mock", "mock-1").simulated
-    real = [p for p in table._prices.values() if not p.simulated]
-    assert real
-    for price in real:
-        assert price.source.startswith("https://")
-        assert price.max_prompt_tokens is not None
+    sonnet = table.get("anthropic", "claude-sonnet-5")
+    assert not sonnet.simulated
+    assert sonnet.source.startswith("https://platform.claude.com/")
     with pytest.raises(PricingError):
         table.get("anthropic", "unknown-model")
+
+
+def test_real_prices_must_cite_an_https_source() -> None:
+    with pytest.raises(ValidationError, match="https source"):
+        _price(source="from memory")
+    assert _price(source="simulated", simulated=True).simulated
 
 
 def test_duplicate_entries_rejected() -> None:

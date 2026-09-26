@@ -1,10 +1,9 @@
 # Proposed Gemini pilot: one seed attack per family x every defense x 1 repeat, plus the
 # paired benign tasks. Same ceiling and defenses as pilot-anthropic.yaml for comparability.
-# Unpriced (ADR 0008) until official Gemini prices are in the table: tokens only, no ASR.
+# Priced from the table (gemini-3.5-flash-lite); run with --budget-usd.
 run_name: pilot-gemini-flash-lite
 provider: gemini
 models: [gemini-3.5-flash-lite]
-unpriced: true
 attacks: [loop-identical-001, flood-repeat-001, reasoning-decoy-001, bloat-appendix-001]
 repeats: 1
 seed: 0

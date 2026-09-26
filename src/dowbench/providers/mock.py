@@ -79,13 +79,14 @@ class MockProvider:
         if "page" in properties:
             arguments["page"] = page
         call = ToolCall(id=f"call_{len(request.messages)}", name=tool.name, arguments=arguments)
+        usage = Usage(
+            input_tokens=input_tokens, output_tokens=approx_tokens(call.model_dump_json())
+        )
         return Response(
             tool_calls=[call],
             stop_reason="tool_use",
-            usage=Usage(
-                input_tokens=input_tokens,
-                output_tokens=approx_tokens(call.model_dump_json()),
-            ),
+            usage=usage,
+            raw={"usage": usage.model_dump()},
         )
 
     def _answer(
@@ -96,12 +97,12 @@ class MockProvider:
         reasoning: int = 0,
         stop: StopReason = "end_turn",
     ) -> Response:
+        usage = Usage(
+            input_tokens=input_tokens, output_tokens=output_tokens, reasoning_tokens=reasoning
+        )
         return Response(
             text=("answer " * output_tokens)[: output_tokens * 4],
             stop_reason=stop,
-            usage=Usage(
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                reasoning_tokens=reasoning,
-            ),
+            usage=usage,
+            raw={"usage": usage.model_dump()},
         )

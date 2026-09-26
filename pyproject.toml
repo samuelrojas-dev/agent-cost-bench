@@ -14,7 +14,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+gemini = ["google-genai>=2.25,<3"]
+anthropic = ["anthropic>=1.8,<2"]
 dev = [
+    "dowbench[gemini,anthropic]",
     "pytest>=8",
     "ruff>=0.6",
     "mypy>=1.11",

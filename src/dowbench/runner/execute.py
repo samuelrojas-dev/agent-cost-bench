@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import functools
 import subprocess
+import uuid
 from collections.abc import Callable
 from pathlib import Path
 
@@ -13,9 +15,9 @@ from dowbench.agent.loop import CallRecord, run_episode
 from dowbench.agent.tools import Injection, ToolBox
 from dowbench.attacks.schema import Dataset
 from dowbench.defenses import build_defenses
-from dowbench.metering.pricing import PriceTable
+from dowbench.metering.pricing import ModelPrice, PriceTable
 from dowbench.metrics import RunSummary, summarize
-from dowbench.providers.base import Provider
+from dowbench.providers.base import Provider, ProviderSetupError
 from dowbench.providers.mock import MockProvider
 from dowbench.runner.config import RunConfig
 from dowbench.runner.matrix import EpisodeSpec, plan_episodes
@@ -24,6 +26,10 @@ from dowbench.runner.store import EpisodeRecord, RunStore
 
 class RunExistsError(RuntimeError):
     pass
+
+
+class EpisodeErroredError(RuntimeError):
+    """A billed call could not be priced; the run stops after recording it (ADR 0007)."""
 
 
 class Estimate(BaseModel):
@@ -47,7 +53,34 @@ class RunInfo(BaseModel):
 def build_provider(config: RunConfig, dataset: Dataset) -> Provider:
     if config.provider == "mock":
         return MockProvider([(a.payload, a.expected_signal) for a in dataset.attacks])
+    if config.provider == "gemini":
+        try:
+            from dowbench.providers.gemini import GeminiProvider
+        except ImportError as exc:
+            raise ProviderSetupError(
+                "the gemini provider needs its SDK: pip install 'dowbench[gemini]'"
+            ) from exc
+        return GeminiProvider()
+    if config.provider == "anthropic":
+        try:
+            from dowbench.providers.claude import AnthropicProvider
+        except ImportError as exc:
+            raise ProviderSetupError(
+                "the anthropic provider needs its SDK: pip install 'dowbench[anthropic]'"
+            ) from exc
+        return AnthropicProvider()
     raise ValueError(f"provider {config.provider!r} is not available yet")
+
+
+def model_prices(config: RunConfig, prices: PriceTable) -> dict[str, ModelPrice]:
+    """Price of each model, refusing ceilings that could reach a costlier tier (ADR 0005).
+
+    Under ADR 0003 no single prompt can exceed ``ceiling.max_total_tokens``.
+    """
+    result = {m: prices.get(config.provider, m) for m in config.models}
+    for price in result.values():
+        price.check_prompt_limit(config.ceiling.max_total_tokens)
+    return result
 
 
 def estimate(
@@ -55,7 +88,7 @@ def estimate(
 ) -> Estimate:
     """Worst case under the safety ceiling (ADR 0003): every pending episode spends it all."""
     pending = [s for s in specs if s.id not in done]
-    per_token = {m: prices.get(config.provider, m).max_usd_per_token for m in config.models}
+    per_token = {m: p.max_usd_per_token for m, p in model_prices(config, prices).items()}
     budget = config.ceiling.max_total_tokens
     return Estimate(
         episodes=len(specs),
@@ -92,7 +125,7 @@ def execute(
     if existing and not resume:
         raise RunExistsError(f"{store.run_dir} already has episodes; resume or rename the run")
     done = {r.episode_id for r in existing}
-    model_prices = {m: prices.get(config.provider, m) for m in config.models}
+    price_of = model_prices(config, prices)
 
     store.write_json(
         store.run_path,
@@ -109,13 +142,25 @@ def execute(
 
     pending = [s for s in specs if s.id not in done]
     for index, spec in enumerate(pending, start=1):
-        record, calls = _run_one(config, dataset, spec, provider)
-        record = record.model_copy(
-            update={"cost_usd": model_prices[spec.model].cost_usd(record.usage)}
+        attempt = uuid.uuid4().hex
+        context = {"episode_id": spec.id, "model": spec.model, "attempt": attempt}
+        record = _run_one(
+            config, dataset, spec, provider, functools.partial(store.append_call, context)
         )
-        store.append(record, calls)
+        record = record.model_copy(
+            update={
+                "cost_usd": price_of[spec.model].cost_usd(record.usage),
+                "attempt": attempt,
+            }
+        )
+        store.append_episode(record)
         if on_episode is not None:
             on_episode(index, len(pending), record)
+        if record.status == "errored":
+            raise EpisodeErroredError(
+                f"episode {spec.id} stopped: {record.reason}. Its spend is recorded; "
+                "resume skips it. Fix the cause before resuming."
+            )
 
     planned = {s.id for s in specs}
     records = [r for r in store.load_episodes() if r.episode_id in planned]
@@ -130,8 +175,12 @@ def execute(
 
 
 def _run_one(
-    config: RunConfig, dataset: Dataset, spec: EpisodeSpec, provider: Provider
-) -> tuple[EpisodeRecord, list[CallRecord]]:
+    config: RunConfig,
+    dataset: Dataset,
+    spec: EpisodeSpec,
+    provider: Provider,
+    on_call: Callable[[CallRecord], None],
+) -> EpisodeRecord:
     task = dataset.benign_task(spec.benign_task_id)
     prompt = task.prompt
     injection = None
@@ -151,8 +200,9 @@ def _run_one(
         toolbox=ToolBox(task.tool, injection),
         defenses=build_defenses(spec.defense),
         ceiling=config.ceiling,
+        on_call=on_call,
     )
-    record = EpisodeRecord(
+    return EpisodeRecord(
         episode_id=spec.id,
         model=spec.model,
         defense=spec.defense.display,
@@ -167,4 +217,3 @@ def _run_one(
         cost_usd=0.0,
         simulated=provider.simulated,
     )
-    return record, result.calls

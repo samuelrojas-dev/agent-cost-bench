@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated
@@ -13,8 +14,10 @@ from dowbench.attacks.schema import load_dataset
 from dowbench.defenses import NO_DEFENSE, REGISTRY
 from dowbench.metering.pricing import PriceTable, PricingError
 from dowbench.metrics import RunSummary
+from dowbench.providers.base import ProviderSetupError
 from dowbench.runner.config import RunConfig
 from dowbench.runner.execute import (
+    EpisodeErroredError,
     Estimate,
     RunExistsError,
     build_provider,
@@ -127,6 +130,11 @@ def run_cmd(
     resume: Annotated[bool, typer.Option(help="Skip episodes already in the run dir")] = True,
 ) -> None:
     """Run the episode matrix and write calls.jsonl, episodes.jsonl and summary.json."""
+    if budget_usd is not None and not (math.isfinite(budget_usd) and budget_usd >= 0):
+        typer.echo(
+            f"--budget-usd must be a finite, non-negative number, got {budget_usd}", err=True
+        )
+        raise typer.Exit(2)
     config = _load_config(config_path, provider)
     dataset = load_dataset()
     prices = PriceTable.load()
@@ -143,7 +151,7 @@ def run_cmd(
     if not config.simulated and budget_usd is None:
         typer.echo("real providers require --budget-usd", err=True)
         raise typer.Exit(2)
-    if budget_usd is not None and worst.worst_case_usd > budget_usd:
+    if budget_usd is not None and not worst.worst_case_usd <= budget_usd:
         typer.echo(
             f"worst case ${worst.worst_case_usd:.4f} exceeds budget ${budget_usd:.4f}; "
             "lower the ceiling, the matrix, or raise the budget",
@@ -155,10 +163,15 @@ def run_cmd(
         typer.echo(f"\r{index}/{total} episodes", nl=index == total)
 
     try:
+        llm = build_provider(config, dataset)
+    except ProviderSetupError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from None
+    try:
         summary = execute(
             config,
             dataset,
-            provider=build_provider(config, dataset),
+            provider=llm,
             prices=prices,
             out_dir=out,
             resume=resume,
@@ -167,5 +180,8 @@ def run_cmd(
     except RunExistsError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(2) from None
+    except EpisodeErroredError as exc:
+        typer.echo(f"{exc}\nresults so far: {out / config.run_name}", err=True)
+        raise typer.Exit(1) from None
     _print_summary(summary)
     typer.echo(f"results: {out / config.run_name}")

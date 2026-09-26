@@ -21,7 +21,10 @@ another counter). Cost comparisons are only valid if every adapter maps usage th
   - `reasoning_tokens`: thinking/reasoning tokens, priced at the output rate. When a
     provider does not report reasoning separately, it stays inside `output_tokens` and
     this field is 0; adapters must never count the same tokens twice.
-- `Response.raw` keeps the provider's original usage object for auditing.
+- `Response.raw["usage"]` keeps the provider's original usage object for auditing.
+  *Amended 2026-09-26:* it was held only in memory; it is now persisted per call as
+  `raw_usage` in `calls.jsonl`, and the loop refuses a non-simulated response without it,
+  so every published cost can be re-derived and the mapping re-checked without a new run.
 - Providers declare `simulated`; results from simulated providers are never published.
 
 ## Consequences

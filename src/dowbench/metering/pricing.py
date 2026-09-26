@@ -6,7 +6,7 @@ import datetime as dt
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from dowbench.metering.usage import Usage
 
@@ -32,7 +32,31 @@ class ModelPrice(BaseModel):
     cache_write_per_mtok: float = Field(ge=0)
     source: str = Field(min_length=1)
     retrieved: dt.date
+    # Largest prompt these rates apply to: the upper edge of the cheapest tier, or the
+    # context window when pricing is flat. Required for real models (ADR 0005).
+    max_prompt_tokens: int | None = Field(default=None, gt=0)
     simulated: bool = False
+
+    @model_validator(mode="after")
+    def _real_prices_are_sourced(self) -> ModelPrice:
+        if self.simulated:
+            return self
+        if not self.source.startswith("https://"):
+            raise ValueError(f"{self.provider}/{self.model}: real prices need an https source URL")
+        if self.max_prompt_tokens is None:
+            raise ValueError(
+                f"{self.provider}/{self.model}: real prices need max_prompt_tokens (ADR 0005)"
+            )
+        return self
+
+    def check_prompt_limit(self, max_prompt_tokens: int) -> None:
+        """Refuse a run whose prompts could leave the tier these rates describe."""
+        if self.max_prompt_tokens is not None and max_prompt_tokens > self.max_prompt_tokens:
+            raise PricingError(
+                f"{self.provider}/{self.model}: prompts up to {max_prompt_tokens:,} tokens "
+                f"exceed the priced tier of {self.max_prompt_tokens:,}; lower "
+                "ceiling.max_total_tokens"
+            )
 
     def cost_usd(self, usage: Usage) -> float:
         return (

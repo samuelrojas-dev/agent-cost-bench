@@ -15,8 +15,9 @@ def _price(**overrides: object) -> ModelPrice:
         "output_per_mtok": 5.0,
         "cache_read_per_mtok": 0.1,
         "cache_write_per_mtok": 1.25,
-        "source": "test",
+        "source": "https://example.com/pricing",
         "retrieved": dt.date(2026, 9, 25),
+        "max_prompt_tokens": 200_000,
     }
     fields.update(overrides)
     return ModelPrice.model_validate(fields)
@@ -56,13 +57,35 @@ def test_max_usd_per_token() -> None:
     assert _price().max_usd_per_token == pytest.approx(5.0 / 1_000_000)
 
 
-def test_default_table_has_only_simulated_mock_entry() -> None:
-    table = PriceTable.load()
+def test_default_table_loads_under_the_sourcing_rules() -> None:
+    table = PriceTable.load()  # every entry is validated on load
     assert table.get("mock", "mock-1").simulated
+    sonnet = table.get("anthropic", "claude-sonnet-5")
+    assert not sonnet.simulated
+    assert sonnet.source.startswith("https://platform.claude.com/")
     with pytest.raises(PricingError):
         table.get("anthropic", "unknown-model")
+
+
+def test_real_prices_must_cite_an_https_source() -> None:
+    with pytest.raises(ValidationError, match="https source"):
+        _price(source="from memory")
+    assert _price(source="simulated", simulated=True).simulated
 
 
 def test_duplicate_entries_rejected() -> None:
     with pytest.raises(ValueError, match="duplicate"):
         PriceTable([_price(), _price()])
+
+
+def test_real_prices_must_declare_their_tier() -> None:
+    with pytest.raises(ValidationError, match="max_prompt_tokens"):
+        _price(max_prompt_tokens=None)
+    assert _price(max_prompt_tokens=None, simulated=True).max_prompt_tokens is None
+
+
+def test_prompt_limit_within_tier_passes_and_beyond_fails() -> None:
+    price = _price(max_prompt_tokens=200_000)
+    price.check_prompt_limit(200_000)
+    with pytest.raises(PricingError, match="exceed the priced tier"):
+        price.check_prompt_limit(200_001)

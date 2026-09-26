@@ -1,4 +1,8 @@
-"""Append-only JSONL storage for a run: one row per model call and one per episode."""
+"""Append-only JSONL storage for a run: one row per model call and one per episode.
+
+Calls are written as they return; the episode row marks the episode as complete. Call rows
+whose ``attempt`` has no episode row belong to an interrupted attempt (ADR 0007).
+"""
 
 from __future__ import annotations
 
@@ -26,6 +30,7 @@ class EpisodeRecord(BaseModel):
     usage: Usage
     cost_usd: float
     simulated: bool
+    attempt: str = ""
 
 
 class RunStore:
@@ -42,14 +47,13 @@ class RunStore:
         with self.episodes_path.open(encoding="utf-8") as fh:
             return [EpisodeRecord.model_validate_json(line) for line in fh if line.strip()]
 
-    def append(self, episode: EpisodeRecord, calls: list[CallRecord]) -> None:
-        """Write the calls first; the episode row marks the episode as complete."""
+    def append_call(self, context: dict[str, str], call: CallRecord) -> None:
         self.run_dir.mkdir(parents=True, exist_ok=True)
-        context = {"episode_id": episode.episode_id, "model": episode.model}
         with self.calls_path.open("a", encoding="utf-8") as fh:
-            for call in calls:
-                row = {**context, **call.model_dump(mode="json")}
-                fh.write(json.dumps(row, sort_keys=True) + "\n")
+            fh.write(json.dumps({**context, **call.model_dump(mode="json")}, sort_keys=True) + "\n")
+
+    def append_episode(self, episode: EpisodeRecord) -> None:
+        self.run_dir.mkdir(parents=True, exist_ok=True)
         with self.episodes_path.open("a", encoding="utf-8") as fh:
             fh.write(episode.model_dump_json() + "\n")
 

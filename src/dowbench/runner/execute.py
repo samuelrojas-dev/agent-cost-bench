@@ -24,6 +24,7 @@ from dowbench.runner.config import RunConfig
 from dowbench.runner.lock import RunLock
 from dowbench.runner.matrix import EpisodeSpec, plan_episodes
 from dowbench.runner.store import EpisodeRecord, RunStore
+from dowbench.sut import Agent, load_agent, run_agent_episode
 
 
 class RunExistsError(RuntimeError):
@@ -39,7 +40,8 @@ class Estimate(BaseModel):
     pending: int
     worst_case_tokens: int
     worst_case_usd: float | None  # None for unpriced runs: never invented (ADR 0008)
-    max_model_calls: int  # each may be preceded by one token-count request
+    max_model_calls: int
+    counted_before_calls: bool = True  # False for agent runs: checked after calls (ADR 0012)
     simulated: bool
 
 
@@ -96,7 +98,10 @@ def estimate(
 ) -> Estimate:
     """Worst case under the safety ceiling (ADR 0003): every pending episode spends it all."""
     pending = [s for s in specs if s.id not in done]
-    budget = config.ceiling.max_total_tokens
+    # Agent runs are checked after each call, so the last call may overshoot the ceiling by
+    # at most one call, itself assumed to be within the ceiling (ADR 0012).
+    budget = config.ceiling.max_total_tokens * (2 if config.agent else 1)
+    turns = config.ceiling.max_turns + (1 if config.agent else 0)
     worst_usd = None
     if not config.unpriced:
         per_token = {m: p.max_usd_per_token for m, p in model_prices(config, prices).items()}
@@ -106,7 +111,8 @@ def estimate(
         pending=len(pending),
         worst_case_tokens=budget * len(pending),
         worst_case_usd=worst_usd,
-        max_model_calls=config.ceiling.max_turns * len(pending),
+        max_model_calls=turns * len(pending),
+        counted_before_calls=config.agent is None,
         simulated=config.simulated,
     )
 
@@ -125,7 +131,8 @@ def execute(
     config: RunConfig,
     dataset: Dataset,
     *,
-    provider: Provider,
+    provider: Provider | None = None,
+    agent: Agent | None = None,
     prices: PriceTable,
     out_dir: Path,
     resume: bool = True,
@@ -133,11 +140,31 @@ def execute(
     budget_usd: float | None = None,
     budget_tokens: int | None = None,
 ) -> RunSummary:
-    """Run pending episodes under the run-directory lock and cumulative budget (ADR 0010)."""
+    """Run pending episodes under the run-directory lock and cumulative budget (ADR 0010).
+
+    The built-in loop needs a ``provider``; an agent run (``config.agent``, ADR 0012) uses
+    ``agent``, loaded from the config when not given.
+    """
+    if config.agent is None:
+        if provider is None or agent is not None:
+            raise ValueError("a built-in run needs a provider and no agent")
+    else:
+        if provider is not None:
+            raise ValueError("an agent run calls models through the agent, not a provider")
+        agent = agent or load_agent(config.agent)
     store = RunStore(out_dir / config.run_name)
     with RunLock(store.run_dir):
         return _execute_locked(
-            config, dataset, store, provider, prices, resume, on_episode, budget_usd, budget_tokens
+            config,
+            dataset,
+            store,
+            provider,
+            agent,
+            prices,
+            resume,
+            on_episode,
+            budget_usd,
+            budget_tokens,
         )
 
 
@@ -145,7 +172,8 @@ def _execute_locked(
     config: RunConfig,
     dataset: Dataset,
     store: RunStore,
-    provider: Provider,
+    provider: Provider | None,
+    agent: Agent | None,
     prices: PriceTable,
     resume: bool,
     on_episode: Callable[[int, int, EpisodeRecord], None] | None,
@@ -174,8 +202,8 @@ def _execute_locked(
         run_name=config.run_name,
         dowbench_version=__version__,
         git_commit=_git_commit(),
-        provider=provider.name,
-        simulated=provider.simulated,
+        provider=provider.name if provider else config.provider,
+        simulated=provider.simulated if provider else config.simulated,
         episodes_planned=len(specs),
         config=config,
         served_model_versions=store.served_model_versions(),
@@ -184,7 +212,7 @@ def _execute_locked(
     )
     store.write_json(store.run_path, info)
     try:
-        _run_pending(config, dataset, specs, done, provider, store, price_of, on_episode)
+        _run_pending(config, dataset, specs, done, provider, agent, store, price_of, on_episode)
     finally:
         # Even when a run stops early, run.json says which model versions actually served.
         info.served_model_versions = store.served_model_versions()
@@ -209,7 +237,8 @@ def _run_pending(
     dataset: Dataset,
     specs: list[EpisodeSpec],
     done: set[str],
-    provider: Provider,
+    provider: Provider | None,
+    agent: Agent | None,
     store: RunStore,
     price_of: dict[str, ModelPrice],
     on_episode: Callable[[int, int, EpisodeRecord], None] | None,
@@ -219,7 +248,7 @@ def _run_pending(
         attempt = uuid.uuid4().hex
         context = {"episode_id": spec.id, "model": spec.model, "attempt": attempt}
         record = _run_one(
-            config, dataset, spec, provider, functools.partial(store.append_call, context)
+            config, dataset, spec, provider, agent, functools.partial(store.append_call, context)
         )
         record = record.model_copy(
             update={
@@ -241,7 +270,8 @@ def _run_one(
     config: RunConfig,
     dataset: Dataset,
     spec: EpisodeSpec,
-    provider: Provider,
+    provider: Provider | None,
+    agent: Agent | None,
     on_call: Callable[[CallRecord], None],
 ) -> EpisodeRecord:
     task = dataset.benign_task(spec.benign_task_id)
@@ -255,16 +285,32 @@ def _run_one(
             assert attack.target_tool is not None  # guaranteed by the schema
             injection = Injection(attack.target_tool, attack.rendered_payload)
 
-    result = run_episode(
-        provider,
-        model=spec.model,
-        system=config.system_prompt,
-        user_prompt=prompt,
-        toolbox=ToolBox(task.tool, injection),
-        defenses=build_defenses(spec.defense),
-        ceiling=config.ceiling,
-        on_call=on_call,
-    )
+    toolbox = ToolBox(task.tool, injection)
+    if agent is not None:
+        simulated = config.simulated
+        result = run_agent_episode(
+            agent,
+            provider=config.provider,
+            simulated=simulated,
+            system=config.system_prompt,
+            user_prompt=prompt,
+            toolbox=toolbox,
+            ceiling=config.ceiling,
+            on_call=on_call,
+        )
+    else:
+        assert provider is not None  # checked by execute()
+        simulated = provider.simulated
+        result = run_episode(
+            provider,
+            model=spec.model,
+            system=config.system_prompt,
+            user_prompt=prompt,
+            toolbox=toolbox,
+            defenses=build_defenses(spec.defense),
+            ceiling=config.ceiling,
+            on_call=on_call,
+        )
     return EpisodeRecord(
         episode_id=spec.id,
         model=spec.model,
@@ -278,5 +324,5 @@ def _run_one(
         turns=result.turns,
         usage=result.usage,
         cost_usd=0.0,
-        simulated=provider.simulated,
+        simulated=simulated,
     )

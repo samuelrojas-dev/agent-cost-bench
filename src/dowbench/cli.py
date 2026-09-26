@@ -30,6 +30,7 @@ from dowbench.runner.execute import (
 from dowbench.runner.lock import RunLockedError
 from dowbench.runner.matrix import plan_episodes
 from dowbench.runner.store import RunStore
+from dowbench.sut import load_agent
 
 app = typer.Typer(no_args_is_help=True, help="Denial-of-wallet benchmark for LLM agents.")
 
@@ -73,7 +74,12 @@ def _print_estimate(result: Estimate) -> None:
     typer.echo(
         f"episodes: {result.episodes} (pending {result.pending})\n"
         f"worst case: {result.worst_case_tokens:,} tokens, {usd}\n"
-        f"model calls: at most {result.max_model_calls}, each preceded by one token count"
+        f"model calls: at most {result.max_model_calls}, "
+        + (
+            "each preceded by one token count"
+            if result.counted_before_calls
+            else "made by the agent and checked after each call"
+        )
     )
     if result.simulated:
         typer.echo(SIMULATED_NOTICE)
@@ -196,16 +202,22 @@ def run_cmd(
     def progress(index: int, total: int, record: object) -> None:
         typer.echo(f"\r{index}/{total} episodes", nl=index == total)
 
+    llm, agent = None, None
     try:
-        llm = build_provider(config, dataset)
-    except ProviderSetupError as exc:
-        typer.echo(str(exc), err=True)
+        if config.agent is None:
+            llm = build_provider(config, dataset)
+        else:
+            # The agent calls its model itself; dowbench only meters it (ADR 0012).
+            agent = load_agent(config.agent)
+    except (ProviderSetupError, ImportError, AttributeError, TypeError, ValueError) as exc:
+        typer.echo(f"cannot set up the run: {exc}", err=True)
         raise typer.Exit(2) from None
     try:
         summary = execute(
             config,
             dataset,
             provider=llm,
+            agent=agent,
             prices=prices,
             out_dir=out,
             resume=resume,

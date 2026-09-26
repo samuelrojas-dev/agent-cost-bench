@@ -37,6 +37,8 @@ class RunConfig(BaseModel):
     # Models without a price entry (e.g. a free tier): no USD is computed, costs stay null,
     # and the run must be capped in tokens instead (ADR 0008).
     unpriced: bool = False
+    # Bring your own agent (ADR 0012): "module:attr" of an object with run(task) -> str.
+    agent: str | None = Field(default=None, pattern=r"^[A-Za-z_][\w.]*:[A-Za-z_]\w*$")
 
     @field_validator("provider")
     @classmethod
@@ -54,6 +56,14 @@ class RunConfig(BaseModel):
             raise ValueError(f"defense labels must be unique: {labels}")
         if sum(spec.name == NO_DEFENSE for spec in self.defenses) != 1:
             raise ValueError("exactly one defense must be 'none': it is the baseline (ADR 0001)")
+        if self.agent is not None:
+            if len(self.models) != 1:
+                raise ValueError("agent runs use exactly one model: the one the agent calls")
+            if len(self.defenses) != 1:
+                raise ValueError(
+                    "agent runs only use the 'none' defense: the agent's own defenses are "
+                    "what is measured (ADR 0012)"
+                )
         return self
 
     @property

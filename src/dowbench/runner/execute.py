@@ -55,6 +55,14 @@ def build_provider(config: RunConfig, dataset: Dataset) -> Provider:
                 "the gemini provider needs its SDK: pip install 'dowbench[gemini]'"
             ) from exc
         return GeminiProvider()
+    if config.provider == "anthropic":
+        try:
+            from dowbench.providers.claude import AnthropicProvider
+        except ImportError as exc:
+            raise ProviderSetupError(
+                "the anthropic provider needs its SDK: pip install 'dowbench[anthropic]'"
+            ) from exc
+        return AnthropicProvider()
     raise ValueError(f"provider {config.provider!r} is not available yet")
 
 

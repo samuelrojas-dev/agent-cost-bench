@@ -22,6 +22,7 @@ from anthropic.types import (
 )
 from anthropic.types import Message as ApiMessage
 from anthropic.types import Usage as ApiUsage
+from pydantic import BaseModel
 
 from dowbench.metering.usage import Usage
 from dowbench.providers.base import (
@@ -165,6 +166,17 @@ def _common(request: Request) -> dict[str, Any]:
     return params
 
 
+def _jsonable(value: Any) -> Any:
+    """Plain JSON for a request that may hold SDK blocks replayed verbatim."""
+    if isinstance(value, BaseModel):
+        return value.model_dump(mode="json", exclude_none=True)
+    if isinstance(value, dict):
+        return {k: _jsonable(v) for k, v in value.items()}
+    if isinstance(value, list | tuple):
+        return [_jsonable(v) for v in value]
+    return value
+
+
 class AnthropicProvider:
     name = "anthropic"
     simulated = False
@@ -191,8 +203,9 @@ class AnthropicProvider:
         return self._client.messages.count_tokens(**_common(request)).input_tokens
 
     def complete(self, request: Request) -> Response:
+        params = {"max_tokens": request.max_tokens, **_common(request)}
         start = time.perf_counter()
-        message = self._client.messages.create(max_tokens=request.max_tokens, **_common(request))
+        message = self._client.messages.create(**params)
         latency = time.perf_counter() - start
 
         raw_usage = message.usage.model_dump(mode="json", exclude_none=True)
@@ -220,4 +233,6 @@ class AnthropicProvider:
                 "id": message.id,
             },
             provider_data={"content": blocks},
+            model_version=message.model,
+            request_body=_jsonable(params),
         )

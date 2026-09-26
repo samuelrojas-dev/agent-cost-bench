@@ -220,9 +220,10 @@ class GeminiProvider:
             max_output_tokens=request.max_tokens,
             automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
         )
+        contents = to_contents(request.messages)
         start = time.perf_counter()
         response = self._client.models.generate_content(
-            model=request.model, contents=to_contents(request.messages), config=config
+            model=request.model, contents=contents, config=config
         )
         latency = time.perf_counter() - start
 
@@ -263,4 +264,10 @@ class GeminiProvider:
                 "finish_reason": str(candidate.finish_reason) if candidate else None,
             },
             provider_data={"content": candidate.content} if candidate and candidate.content else {},
+            model_version=response.model_version,
+            request_body={
+                "model": request.model,
+                "contents": [c.model_dump(mode="json", exclude_none=True) for c in contents],
+                "config": config.model_dump(mode="json", exclude_none=True),
+            },
         )

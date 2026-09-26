@@ -41,6 +41,9 @@ class CallRecord(BaseModel):
     # mapping of ADR 0002 audited without a new paid run.
     raw_usage: dict[str, Any] = Field(default_factory=dict)
     error: str | None = None
+    model_version: str | None = None
+    # Written to requests.jsonl, sanitized, not to calls.jsonl (ADR 0009).
+    request_body: dict[str, Any] = Field(default_factory=dict, exclude=True)
 
 
 class EpisodeResult(BaseModel):
@@ -148,6 +151,8 @@ def run_episode(
                 tool_calls=len(response.tool_calls),
                 latency_s=response.latency_s,
                 raw_usage=raw_usage or {},
+                model_version=response.model_version,
+                request_body=response.request_body,
             )
         )
 

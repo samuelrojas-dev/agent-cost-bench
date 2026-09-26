@@ -244,3 +244,28 @@ def test_interrupted_episode_keeps_its_billed_calls(tmp_path: Path) -> None:
     execute(config, dataset, provider=resumed, prices=PriceTable.load(), out_dir=tmp_path)
     episodes = _rows(run_dir / "episodes.jsonl")
     assert orphan_attempt not in {e["attempt"] for e in episodes}
+
+
+def test_calls_record_model_version_and_requests_are_kept_sanitized(tmp_path: Path) -> None:
+    config = _config()
+    _execute(config, tmp_path)
+    run_dir = tmp_path / config.run_name
+    calls, requests = _rows(run_dir / "calls.jsonl"), _rows(run_dir / "requests.jsonl")
+    assert {c["model_version"] for c in calls} == {"mock-1-simulated"}
+    assert "request_body" not in calls[0]
+    assert len(requests) == len(calls)
+    assert [(r["episode_id"], r["turn"]) for r in requests] == [
+        (c["episode_id"], c["turn"]) for c in calls
+    ]
+    assert requests[0]["request"] == {"model": "mock-1", "messages": 1}
+    info = json.loads((run_dir / "run.json").read_text())
+    assert info["served_model_versions"] == {"mock-1": ["mock-1-simulated"]}
+
+
+def test_run_json_names_served_versions_even_when_the_run_stops(tmp_path: Path) -> None:
+    config, dataset = _config(), load_dataset()
+    provider = _FailingProvider(fail_on=2, error=TimeoutError("read timed out"))
+    with pytest.raises(TimeoutError):
+        execute(config, dataset, provider=provider, prices=PriceTable.load(), out_dir=tmp_path)
+    info = json.loads((tmp_path / config.run_name / "run.json").read_text())
+    assert info["served_model_versions"] == {"mock-1": ["mock-1-simulated"]}

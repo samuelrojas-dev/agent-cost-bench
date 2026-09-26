@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 from typing import Any
@@ -316,3 +317,32 @@ def test_build_provider_without_sdk_explains_the_extra(monkeypatch: pytest.Monke
     )
     with pytest.raises(ProviderSetupError, match=r"dowbench\[anthropic\]"):
         build_provider(config, load_dataset())
+
+
+def test_request_body_and_model_version_are_reported() -> None:
+    content: list[dict[str, Any]] = [
+        {"type": "thinking", "thinking": "", "signature": "sig"},
+        {"type": "tool_use", "id": "tu_1", "name": "search", "input": {"q": "a"}},
+    ]
+    first_provider, _ = _provider(_message(content, stop="tool_use"))
+    first = first_provider.complete(_request())
+    assert first.model_version == "claude-test"
+
+    provider, fake = _provider(_message([{"type": "text", "text": "done"}]))
+    follow_up = _request(
+        [
+            Message(role="user", content="hi"),
+            Message(
+                role="assistant", tool_calls=first.tool_calls, provider_data=first.provider_data
+            ),
+            Message(role="tool", content="r", tool_call_id="tu_1"),
+        ]
+    )
+    body = provider.complete(follow_up).request_body
+    assert body["max_tokens"] == fake.created[0]["max_tokens"]
+    assert body["messages"][1]["content"][0] == {
+        "type": "thinking",
+        "thinking": "",
+        "signature": "sig",
+    }
+    json.dumps(body)  # plain JSON, ready for requests.jsonl

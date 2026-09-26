@@ -1,18 +1,27 @@
 """Gemini Developer API adapter on the official ``google-genai`` SDK (ADR 0002, ADR 0004).
 
-The API key comes from ``GEMINI_API_KEY`` in the environment; it is never passed in code.
+The key is read only from ``GEMINI_API_KEY`` and handed to the SDK explicitly, so a stray
+``GOOGLE_API_KEY`` or Vertex setting cannot bill another account (ADR 0005).
 """
 
 from __future__ import annotations
 
 import json
+import os
 import time
 from typing import Any, Protocol
 
 from google.genai import types
 
 from dowbench.metering.usage import Usage
-from dowbench.providers.base import Message, Request, Response, StopReason, ToolCall
+from dowbench.providers.base import (
+    Message,
+    ProviderSetupError,
+    Request,
+    Response,
+    StopReason,
+    ToolCall,
+)
 
 
 class UsageMappingError(ValueError):
@@ -50,6 +59,10 @@ _REFUSALS = frozenset(
 # Headroom for the chat template around system instruction and function declarations,
 # which the Developer API cannot count (ADR 0004).
 TEMPLATE_MARGIN_TOKENS = 64
+
+# A hung call must not block a run forever. No retries: a retried call that was billed
+# but not answered would be spent twice and recorded once (ADR 0005).
+REQUEST_TIMEOUT_S = 120
 
 
 class _Models(Protocol):
@@ -173,7 +186,14 @@ class GeminiProvider:
         if client is None:
             from google import genai
 
-            client = genai.Client()  # reads GEMINI_API_KEY
+            api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+            if not api_key:
+                raise ProviderSetupError("GEMINI_API_KEY is not set; see .env.example")
+            client = genai.Client(
+                api_key=api_key,
+                vertexai=False,
+                http_options=types.HttpOptions(timeout=REQUEST_TIMEOUT_S * 1000),
+            )
         self._client = client
 
     def count_tokens(self, request: Request) -> int:

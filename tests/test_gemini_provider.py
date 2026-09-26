@@ -3,20 +3,28 @@
 from __future__ import annotations
 
 import json
+import sys
+from pathlib import Path
 from typing import Any
 
 import pytest
 from google.genai import types
 
+from dowbench.attacks.schema import load_dataset
 from dowbench.metering.usage import Usage
-from dowbench.providers.base import Message, Request, ToolCall, ToolSpec
+from dowbench.providers.base import Message, ProviderSetupError, Request, ToolCall, ToolSpec
 from dowbench.providers.gemini import (
+    REQUEST_TIMEOUT_S,
     TEMPLATE_MARGIN_TOKENS,
     GeminiProvider,
     UsageMappingError,
     map_usage,
     to_contents,
 )
+from dowbench.runner.config import RunConfig
+from dowbench.runner.execute import build_provider
+
+PILOT = Path(__file__).parent.parent / "configs" / "pilot.yaml"
 
 SEARCH = ToolSpec(
     name="search",
@@ -273,3 +281,44 @@ def test_thought_signature_round_trips_without_changing_call_identity() -> None:
         ]
     )
     assert (contents[1].parts or [])[0].thought_signature == b"sig"
+
+
+# --- client setup (ADR 0005) ---
+
+
+def test_missing_key_refuses_to_build(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GOOGLE_API_KEY", "other-account")
+    monkeypatch.setenv("GEMINI_API_KEY", "  ")
+    with pytest.raises(ProviderSetupError, match="GEMINI_API_KEY"):
+        GeminiProvider()
+
+
+def test_client_gets_explicit_key_developer_api_and_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    built: list[dict[str, Any]] = []
+
+    class RecordingClient:
+        def __init__(self, **kwargs: Any) -> None:
+            built.append(kwargs)
+
+    monkeypatch.setattr("google.genai.Client", RecordingClient)
+    monkeypatch.setenv("GOOGLE_API_KEY", "other-account")
+    monkeypatch.setenv("GOOGLE_GENAI_USE_VERTEXAI", "true")
+    monkeypatch.setenv("GEMINI_API_KEY", "gemini-key")
+    GeminiProvider()
+    options: types.HttpOptions = built[0]["http_options"]
+    assert built[0]["api_key"] == "gemini-key"
+    assert built[0]["vertexai"] is False
+    assert options.timeout == REQUEST_TIMEOUT_S * 1000
+    assert options.retry_options is None
+
+
+def test_build_provider_without_sdk_explains_the_extra(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delitem(sys.modules, "dowbench.providers.gemini", raising=False)
+    monkeypatch.setitem(sys.modules, "google.genai", None)
+    config = RunConfig.model_validate(
+        {**RunConfig.from_yaml(PILOT).model_dump(mode="json"), "provider": "gemini"}
+    )
+    with pytest.raises(ProviderSetupError, match=r"dowbench\[gemini\]"):
+        build_provider(config, load_dataset())

@@ -13,6 +13,7 @@ from dowbench.attacks.schema import load_dataset
 from dowbench.defenses import NO_DEFENSE, REGISTRY
 from dowbench.metering.pricing import PriceTable, PricingError
 from dowbench.metrics import RunSummary
+from dowbench.providers.base import ProviderSetupError
 from dowbench.runner.config import RunConfig
 from dowbench.runner.execute import (
     Estimate,
@@ -155,10 +156,15 @@ def run_cmd(
         typer.echo(f"\r{index}/{total} episodes", nl=index == total)
 
     try:
+        llm = build_provider(config, dataset)
+    except ProviderSetupError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from None
+    try:
         summary = execute(
             config,
             dataset,
-            provider=build_provider(config, dataset),
+            provider=llm,
             prices=prices,
             out_dir=out,
             resume=resume,

@@ -15,7 +15,7 @@ from dowbench.attacks.schema import Dataset
 from dowbench.defenses import build_defenses
 from dowbench.metering.pricing import ModelPrice, PriceTable
 from dowbench.metrics import RunSummary, summarize
-from dowbench.providers.base import Provider
+from dowbench.providers.base import Provider, ProviderSetupError
 from dowbench.providers.mock import MockProvider
 from dowbench.runner.config import RunConfig
 from dowbench.runner.matrix import EpisodeSpec, plan_episodes
@@ -48,8 +48,12 @@ def build_provider(config: RunConfig, dataset: Dataset) -> Provider:
     if config.provider == "mock":
         return MockProvider([(a.payload, a.expected_signal) for a in dataset.attacks])
     if config.provider == "gemini":
-        from dowbench.providers.gemini import GeminiProvider
-
+        try:
+            from dowbench.providers.gemini import GeminiProvider
+        except ImportError as exc:
+            raise ProviderSetupError(
+                "the gemini provider needs its SDK: pip install 'dowbench[gemini]'"
+            ) from exc
         return GeminiProvider()
     raise ValueError(f"provider {config.provider!r} is not available yet")
 

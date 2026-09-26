@@ -13,6 +13,10 @@ Role = Literal["user", "assistant", "tool"]
 StopReason = Literal["end_turn", "tool_use", "max_tokens", "refusal", "other"]
 
 
+class ProviderSetupError(RuntimeError):
+    """The provider cannot be built: missing optional dependency or credentials."""
+
+
 class ToolCall(BaseModel):
     model_config = ConfigDict(frozen=True)
 

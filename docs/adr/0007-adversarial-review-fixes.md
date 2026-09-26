@@ -46,7 +46,7 @@ account or redirect the key, and that "at most one call per run is unrecorded".
   and replay variables until this ADR.
 
 ## Not fixed (accepted, documented)
-- **Budget is per invocation.** `--budget-usd` bounds the pending episodes of one `run`;
+- **Budget is per invocation.** *Fixed by ADR 0010: cumulative budget and run lock.* `--budget-usd` bounds the pending episodes of one `run`;
   spend of earlier invocations and of interrupted attempts is not subtracted. Two `run`
   processes on the same run directory would each spend up to their budget. Mitigation for
   now: one run per directory, by hand. A lock file and a cumulative total are the fix if

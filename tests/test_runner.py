@@ -9,6 +9,7 @@ from dowbench.attacks.schema import load_dataset
 from dowbench.metering.pricing import PriceTable, PricingError
 from dowbench.providers.base import Request, Response, UsageMappingError
 from dowbench.providers.mock import MockProvider
+from dowbench.runner.budget import BudgetError, spent
 from dowbench.runner.config import RunConfig
 from dowbench.runner.execute import (
     EpisodeErroredError,
@@ -17,7 +18,9 @@ from dowbench.runner.execute import (
     estimate,
     execute,
 )
+from dowbench.runner.lock import RunLock, RunLockedError
 from dowbench.runner.matrix import plan_episodes
+from dowbench.runner.store import RunStore
 
 PILOT = Path(__file__).parent.parent / "configs" / "pilot.yaml"
 
@@ -269,3 +272,62 @@ def test_run_json_names_served_versions_even_when_the_run_stops(tmp_path: Path) 
         execute(config, dataset, provider=provider, prices=PriceTable.load(), out_dir=tmp_path)
     info = json.loads((tmp_path / config.run_name / "run.json").read_text())
     assert info["served_model_versions"] == {"mock-1": ["mock-1-simulated"]}
+
+
+def test_budget_counts_what_earlier_attempts_already_spent(tmp_path: Path) -> None:
+    config, dataset = _config(), load_dataset()
+    prices = PriceTable.load()
+    specs = plan_episodes(config, dataset)
+    full_worst = estimate(config, specs, prices, done=set()).worst_case_usd
+    assert full_worst is not None
+
+    # First attempt: billed calls, then an interruption.
+    provider = _FailingProvider(fail_on=4, error=TimeoutError("read timed out"))
+    with pytest.raises(TimeoutError):
+        execute(
+            config,
+            dataset,
+            provider=provider,
+            prices=prices,
+            out_dir=tmp_path,
+            budget_usd=full_worst,
+        )
+    already = spent(RunStore(tmp_path / config.run_name), config, prices)
+    assert already.tokens > 0 and already.usd is not None and already.usd > 0
+
+    # The same budget no longer covers spent + the (unchanged) pending worst case.
+    done = {r.episode_id for r in RunStore(tmp_path / config.run_name).load_episodes()}
+    pending_worst = estimate(config, specs, prices, done).worst_case_usd
+    assert pending_worst is not None
+    resumed = _FailingProvider(fail_on=0, error=TimeoutError())
+    with pytest.raises(BudgetError, match="exceeds budget"):
+        execute(
+            config,
+            dataset,
+            provider=resumed,
+            prices=prices,
+            out_dir=tmp_path,
+            budget_usd=already.usd + pending_worst - 1e-9,
+        )
+    assert resumed.calls == 0  # refused before any call
+
+    execute(
+        config,
+        dataset,
+        provider=resumed,
+        prices=prices,
+        out_dir=tmp_path,
+        budget_usd=already.usd + pending_worst,
+    )
+    info = json.loads((tmp_path / config.run_name / "run.json").read_text())
+    final = spent(RunStore(tmp_path / config.run_name), config, prices)
+    assert info["spent_tokens"] == final.tokens > already.tokens
+
+
+def test_a_second_run_on_the_same_directory_is_refused(tmp_path: Path) -> None:
+    config, dataset = _config(), load_dataset()
+    provider = _FailingProvider(fail_on=0, error=TimeoutError())
+    with RunLock(tmp_path / config.run_name), pytest.raises(RunLockedError):
+        execute(config, dataset, provider=provider, prices=PriceTable.load(), out_dir=tmp_path)
+    assert provider.calls == 0
+    assert not (tmp_path / config.run_name / "calls.jsonl").exists()

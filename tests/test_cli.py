@@ -88,3 +88,21 @@ def test_unpriced_real_run_is_capped_in_tokens(
     assert message in result.output
     assert "USD not computed" in result.output
     assert not (tmp_path / "smoke").exists()  # refused before building the provider
+
+
+def test_estimate_shows_what_the_run_dir_already_spent(tmp_path: Path) -> None:
+    runner.invoke(app, ["run", PILOT, "--out", str(tmp_path)])
+    result = runner.invoke(app, ["estimate", PILOT, "--out", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "already spent in this run dir:" in result.output
+    assert "already spent in this run dir: 0 tokens" not in result.output
+
+
+def test_run_refuses_a_locked_run_dir(tmp_path: Path) -> None:
+    run_dir = tmp_path / "pilot-mock"
+    run_dir.mkdir()
+    (run_dir / "run.lock").write_text('{"pid": 1, "host": "h", "started": "t"}')
+    result = runner.invoke(app, ["run", PILOT, "--out", str(tmp_path)])
+    assert result.exit_code == 2
+    assert "another run may be using this directory" in result.output
+    assert not (run_dir / "calls.jsonl").exists()

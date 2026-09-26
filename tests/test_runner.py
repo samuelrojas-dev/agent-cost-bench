@@ -6,7 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from dowbench.attacks.schema import load_dataset
-from dowbench.metering.pricing import PriceTable
+from dowbench.metering.pricing import PriceTable, PricingError
 from dowbench.runner.config import RunConfig
 from dowbench.runner.execute import RunExistsError, build_provider, estimate, execute
 from dowbench.runner.matrix import plan_episodes
@@ -75,6 +75,25 @@ def test_estimate_is_ceiling_times_pending_episodes() -> None:
     assert result.pending == len(specs) - 1
     assert result.worst_case_tokens == 50_000 * (len(specs) - 1)
     assert result.worst_case_usd == pytest.approx(result.worst_case_tokens * 5.0 / 1_000_000)
+
+
+def test_ceiling_beyond_priced_tier_refuses_estimate_and_execute(tmp_path: Path) -> None:
+    mock = PriceTable.load().get("mock", "mock-1")
+    prices = PriceTable([mock.model_copy(update={"max_prompt_tokens": 10_000})])
+    config = _config()
+    dataset = load_dataset()
+    specs = plan_episodes(config, dataset)
+    with pytest.raises(PricingError, match="priced tier"):
+        estimate(config, specs, prices, done=set())
+    with pytest.raises(PricingError, match="priced tier"):
+        execute(
+            config,
+            dataset,
+            provider=build_provider(config, dataset),
+            prices=prices,
+            out_dir=tmp_path,
+        )
+    assert not (tmp_path / config.run_name / "episodes.jsonl").exists()
 
 
 def test_pilot_run_writes_calls_episodes_and_summary(tmp_path: Path) -> None:

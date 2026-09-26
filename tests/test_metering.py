@@ -17,6 +17,7 @@ def _price(**overrides: object) -> ModelPrice:
         "cache_write_per_mtok": 1.25,
         "source": "test",
         "retrieved": dt.date(2026, 9, 25),
+        "max_prompt_tokens": 200_000,
     }
     fields.update(overrides)
     return ModelPrice.model_validate(fields)
@@ -66,3 +67,16 @@ def test_default_table_has_only_simulated_mock_entry() -> None:
 def test_duplicate_entries_rejected() -> None:
     with pytest.raises(ValueError, match="duplicate"):
         PriceTable([_price(), _price()])
+
+
+def test_real_prices_must_declare_their_tier() -> None:
+    with pytest.raises(ValidationError, match="max_prompt_tokens"):
+        _price(max_prompt_tokens=None)
+    assert _price(max_prompt_tokens=None, simulated=True).max_prompt_tokens is None
+
+
+def test_prompt_limit_within_tier_passes_and_beyond_fails() -> None:
+    price = _price(max_prompt_tokens=200_000)
+    price.check_prompt_limit(200_000)
+    with pytest.raises(PricingError, match="exceed the priced tier"):
+        price.check_prompt_limit(200_001)

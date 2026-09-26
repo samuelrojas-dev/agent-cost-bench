@@ -13,7 +13,7 @@ from dowbench.agent.loop import CallRecord, run_episode
 from dowbench.agent.tools import Injection, ToolBox
 from dowbench.attacks.schema import Dataset
 from dowbench.defenses import build_defenses
-from dowbench.metering.pricing import PriceTable
+from dowbench.metering.pricing import ModelPrice, PriceTable
 from dowbench.metrics import RunSummary, summarize
 from dowbench.providers.base import Provider
 from dowbench.providers.mock import MockProvider
@@ -54,12 +54,23 @@ def build_provider(config: RunConfig, dataset: Dataset) -> Provider:
     raise ValueError(f"provider {config.provider!r} is not available yet")
 
 
+def model_prices(config: RunConfig, prices: PriceTable) -> dict[str, ModelPrice]:
+    """Price of each model, refusing ceilings that could reach a costlier tier (ADR 0005).
+
+    Under ADR 0003 no single prompt can exceed ``ceiling.max_total_tokens``.
+    """
+    result = {m: prices.get(config.provider, m) for m in config.models}
+    for price in result.values():
+        price.check_prompt_limit(config.ceiling.max_total_tokens)
+    return result
+
+
 def estimate(
     config: RunConfig, specs: list[EpisodeSpec], prices: PriceTable, done: set[str]
 ) -> Estimate:
     """Worst case under the safety ceiling (ADR 0003): every pending episode spends it all."""
     pending = [s for s in specs if s.id not in done]
-    per_token = {m: prices.get(config.provider, m).max_usd_per_token for m in config.models}
+    per_token = {m: p.max_usd_per_token for m, p in model_prices(config, prices).items()}
     budget = config.ceiling.max_total_tokens
     return Estimate(
         episodes=len(specs),
@@ -96,7 +107,7 @@ def execute(
     if existing and not resume:
         raise RunExistsError(f"{store.run_dir} already has episodes; resume or rename the run")
     done = {r.episode_id for r in existing}
-    model_prices = {m: prices.get(config.provider, m) for m in config.models}
+    price_of = model_prices(config, prices)
 
     store.write_json(
         store.run_path,
@@ -114,9 +125,7 @@ def execute(
     pending = [s for s in specs if s.id not in done]
     for index, spec in enumerate(pending, start=1):
         record, calls = _run_one(config, dataset, spec, provider)
-        record = record.model_copy(
-            update={"cost_usd": model_prices[spec.model].cost_usd(record.usage)}
-        )
+        record = record.model_copy(update={"cost_usd": price_of[spec.model].cost_usd(record.usage)})
         store.append(record, calls)
         if on_episode is not None:
             on_episode(index, len(pending), record)

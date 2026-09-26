@@ -1,4 +1,6 @@
 # USD per million tokens. Every real entry needs the official pricing URL and the date it was read.
+# `max_prompt_tokens`: upper edge of the tier these rates apply to (the context window if flat);
+# required for real entries (ADR 0005).
 # Entries with `simulated: true` exist only for the mock provider; their results are never published.
 prices:
   - provider: mock

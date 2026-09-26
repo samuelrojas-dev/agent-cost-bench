@@ -254,6 +254,11 @@ def test_provider_data_round_trips_through_the_cassette() -> None:
 # --- no key ever reaches the cassette, even inside base64 provider_data ---
 
 
+# Every key shape the sanitizer masks (ADR 0009): Google API keys, Google OAuth (AQ.)
+# and Anthropic keys. All three must be scrubbed from the cassette, base64 included.
+_KEY_SHAPES = ("AIza", "AQ.", "sk-ant-")
+
+
 class _LeakyProvider(RealishProvider):
     """A provider that (wrongly) puts key-shaped strings in its response, to prove sanitize."""
 
@@ -261,8 +266,16 @@ class _LeakyProvider(RealishProvider):
         response = super().complete(request)
         return response.model_copy(
             update={
-                "provider_data": {"signature": "AIza" + "L" * 35, "note": "sk-ant-" + "L" * 40},
-                "raw": {"usage": response.usage.model_dump(), "api_key": "AIza" + "Z" * 35},
+                "provider_data": {
+                    "signature": "AIza" + "L" * 35,
+                    "oauth": "AQ." + "O" * 40,  # Google OAuth token shape (AQ.)
+                    "note": "sk-ant-" + "L" * 40,
+                },
+                "raw": {
+                    "usage": response.usage.model_dump(),
+                    "api_key": "AIza" + "Z" * 35,
+                    "refresh_token": "AQ." + "R" * 40,
+                },
             }
         )
 
@@ -276,13 +289,15 @@ def test_no_api_key_reaches_the_cassette_even_inside_provider_data(
     cassette_path = recorded / "cassette.jsonl"
     text = cassette_path.read_text(encoding="utf-8")
 
-    assert "AIza" not in text and "sk-ant-" not in text  # not in the plaintext of the file
+    for shape in _KEY_SHAPES:
+        assert shape not in text  # not in the plaintext of the file
     # And not hidden inside the base64 provider_data either: decode and check.
     for row in _rows(cassette_path):
         blob = (row.get("response") or {}).get("provider_data_b64", "")
         if blob:
             decoded = base64.b64decode(blob).decode("utf-8")
-            assert "AIza" not in decoded and "sk-ant-" not in decoded
+            for shape in _KEY_SHAPES:
+                assert shape not in decoded
 
 
 # --- a committed synthetic fixture replays offline (ADR 0015 §6) ---

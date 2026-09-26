@@ -225,8 +225,10 @@ def _execute_locked(
     if config.rate_limit is not None and provider is not None and not provider.simulated:
         limiter = RateLimiter(config.rate_limit)
         provider = RateLimitedProvider(provider, limiter)
-    # Real runs always record a cassette so they can be replayed offline later (ADR 0015).
-    if provider is not None and not provider.simulated and not replaying:
+    # Every run records a cassette so it can be replayed offline later; a replayed run keeps
+    # the source's simulated flag, so a mock cassette stays SIMULATED and is never taken for a
+    # real result (ADR 0015).
+    if provider is not None and not replaying:
         provider = RecordingProvider(provider, store)
 
     info = RunInfo(

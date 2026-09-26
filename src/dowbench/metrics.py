@@ -21,7 +21,8 @@ def wilson_interval(successes: int, n: int, z: float = _Z95) -> tuple[float, flo
     denom = 1 + z * z / n
     centre = (p + z * z / (2 * n)) / denom
     half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / denom
-    return (max(0.0, centre - half), min(1.0, centre + half))
+    # The Wilson interval always contains p; clamping to it absorbs float rounding at p=0 or 1.
+    return (max(0.0, min(p, centre - half)), min(1.0, max(p, centre + half)))
 
 
 def _median(values: Sequence[float]) -> float | None:

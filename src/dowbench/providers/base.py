@@ -19,6 +19,9 @@ class ToolCall(BaseModel):
     id: str
     name: str
     arguments: dict[str, Any] = Field(default_factory=dict)
+    # Opaque data the same provider needs back on the next turn (e.g. Gemini thought
+    # signatures). Not part of the call's identity and never serialized.
+    provider_data: dict[str, Any] = Field(default_factory=dict, exclude=True)
 
     def signature(self) -> str:
         """Identity of the call ignoring its id: name plus canonical arguments."""

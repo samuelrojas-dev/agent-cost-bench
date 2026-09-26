@@ -11,7 +11,8 @@ client had no timeout; the price table has one rate per model while some provide
 more above a prompt size; and every install pulled a provider SDK that only real runs need.
 
 ## Decision
-1. **Key**: each adapter reads exactly one variable (`GEMINI_API_KEY`) and passes it to the
+1. **Key** (*amended by ADR 0007*: Gemini also needed its base URL and replay mode pinned):
+   each adapter reads exactly one variable (`GEMINI_API_KEY`) and passes it to the
    SDK explicitly, with `vertexai=False`. A missing or blank key raises
    `ProviderSetupError` and `run` exits with code 2. The SDK still logs "Using
    GOOGLE_API_KEY" when both are set; checked against the constructed client, the explicit
@@ -40,6 +41,7 @@ more above a prompt size; and every install pulled a provider SDK that only real
 ## Consequences
 - A timed-out call may still be billed without being recorded. The run stops at that point,
   so at most one call per run is unrecorded, and it is bounded by the ceiling.
+  *Corrected by ADR 0007:* this was false until calls were written as they return.
 - Free-tier 429s stop the run; the operator resumes it.
 - The tier check relies on providers that can count tokens before sending (mock, Gemini).
   An adapter whose `count_tokens` returns `None` needs its own tier argument in its ADR.

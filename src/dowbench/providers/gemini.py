@@ -115,13 +115,16 @@ def to_contents(messages: list[Message]) -> list[types.Content]:
         if message.role == "user":
             contents.append(types.Content(role="user", parts=[types.Part(text=message.content)]))
         elif message.role == "assistant":
+            replay = message.provider_data.get("content")
+            if isinstance(replay, types.Content):
+                contents.append(replay)  # verbatim, with thought signatures (ADR 0006)
+                continue
             parts = [types.Part(text=message.content)] if message.content else []
             parts += [
                 types.Part(
                     function_call=types.FunctionCall(
                         id=call.id, name=call.name, args=call.arguments
-                    ),
-                    thought_signature=call.provider_data.get("thought_signature"),
+                    )
                 )
                 for call in message.tool_calls
             ]
@@ -234,11 +237,6 @@ class GeminiProvider:
                         id=call.id or f"call_{len(request.messages)}_{len(tool_calls)}",
                         name=call.name or "",
                         arguments=call.args or {},
-                        provider_data=(
-                            {"thought_signature": part.thought_signature}
-                            if part.thought_signature
-                            else {}
-                        ),
                     )
                 )
         metadata = response.usage_metadata
@@ -253,4 +251,5 @@ class GeminiProvider:
                 "model_version": response.model_version,
                 "finish_reason": str(candidate.finish_reason) if candidate else None,
             },
+            provider_data={"content": candidate.content} if candidate and candidate.content else {},
         )

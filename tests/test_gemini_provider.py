@@ -259,28 +259,31 @@ def test_count_tokens_without_tools() -> None:
     assert counted == 40 + len("Be brief.") + TEMPLATE_MARGIN_TOKENS
 
 
-def test_thought_signature_round_trips_without_changing_call_identity() -> None:
+def test_model_turn_is_replayed_verbatim_with_thought_signatures() -> None:
     parts = [
+        types.Part(text="thinking", thought=True, thought_signature=b"sig-text"),
         types.Part(
             function_call=types.FunctionCall(id="c1", name="search", args={"q": "a"}),
             thought_signature=b"sig",
-        )
+        ),
     ]
-    call = (
-        GeminiProvider(FakeClient(FakeModels(_response(parts)))).complete(_request()).tool_calls[0]
-    )
-    assert call.provider_data == {"thought_signature": b"sig"}
-    assert call.signature() == ToolCall(id="x", name="search", arguments={"q": "a"}).signature()
-    assert "provider_data" not in call.model_dump()
+    response = GeminiProvider(FakeClient(FakeModels(_response(parts)))).complete(_request())
+    assert "provider_data" not in response.model_dump()
 
     contents = to_contents(
         [
             Message(role="user", content="hi"),
-            Message(role="assistant", tool_calls=[call]),
+            Message(
+                role="assistant",
+                tool_calls=response.tool_calls,
+                provider_data=response.provider_data,
+            ),
             Message(role="tool", content="r", tool_call_id="c1"),
         ]
     )
-    assert (contents[1].parts or [])[0].thought_signature == b"sig"
+    replayed = contents[1].parts or []
+    assert [p.thought_signature for p in replayed] == [b"sig-text", b"sig"]
+    assert replayed[0].thought is True
 
 
 # --- client setup (ADR 0005) ---

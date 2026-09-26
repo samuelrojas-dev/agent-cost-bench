@@ -122,7 +122,12 @@ def run_episode(
             return finish("completed", text=response.text)
 
         messages.append(
-            Message(role="assistant", content=response.text, tool_calls=response.tool_calls)
+            Message(
+                role="assistant",
+                content=response.text,
+                tool_calls=response.tool_calls,
+                provider_data=response.provider_data,
+            )
         )
         for call in response.tool_calls:
             state.tool_calls.append(call)

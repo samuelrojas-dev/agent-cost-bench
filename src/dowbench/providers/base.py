@@ -23,9 +23,6 @@ class ToolCall(BaseModel):
     id: str
     name: str
     arguments: dict[str, Any] = Field(default_factory=dict)
-    # Opaque data the same provider needs back on the next turn (e.g. Gemini thought
-    # signatures). Not part of the call's identity and never serialized.
-    provider_data: dict[str, Any] = Field(default_factory=dict, exclude=True)
 
     def signature(self) -> str:
         """Identity of the call ignoring its id: name plus canonical arguments."""
@@ -37,6 +34,9 @@ class Message(BaseModel):
     content: str = ""
     tool_calls: list[ToolCall] = Field(default_factory=list)
     tool_call_id: str | None = None
+    # The assistant turn exactly as the provider returned it (thinking blocks, signatures),
+    # replayed verbatim by the same provider on the next turn (ADR 0006). Never serialized.
+    provider_data: dict[str, Any] = Field(default_factory=dict, exclude=True)
 
 
 class ToolSpec(BaseModel):
@@ -62,6 +62,7 @@ class Response(BaseModel):
     usage: Usage
     latency_s: float = Field(default=0.0, ge=0)
     raw: dict[str, Any] = Field(default_factory=dict)
+    provider_data: dict[str, Any] = Field(default_factory=dict, exclude=True)
 
 
 class Provider(Protocol):

@@ -30,6 +30,7 @@ from dowbench.runner.execute import (
 from dowbench.runner.lock import RunLockedError
 from dowbench.runner.matrix import plan_episodes
 from dowbench.runner.rate_limit import RateLimitReached
+from dowbench.runner.replay import CassetteDriftError, replay_run
 from dowbench.runner.store import RunStore
 from dowbench.sut import load_agent
 
@@ -244,6 +245,31 @@ def run_cmd(
         raise typer.Exit(3) from None
     _print_summary(summary)
     typer.echo(f"results: {out / config.run_name}")
+
+
+@app.command("replay")
+def replay_cmd(
+    run_dir: Annotated[
+        Path,
+        typer.Argument(exists=True, file_okay=False, help="A recorded run dir with cassette.jsonl"),
+    ],
+    out: Annotated[Path, typer.Option("--out", help="Directory for the replayed results")] = Path(
+        "results/replays"
+    ),
+) -> None:
+    """Replay a recorded run offline from its cassette. Makes no calls and spends nothing."""
+    dataset = load_dataset()
+    prices = PriceTable.load()
+    try:
+        summary = replay_run(run_dir, out_dir=out, prices=prices, dataset=dataset)
+    except (FileNotFoundError, NotImplementedError, CassetteDriftError, RunExistsError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from None
+    except (RunLockedError, PricingError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from None
+    _print_summary(summary)
+    typer.echo(f"replayed results: {out / summary.run_name}")
 
 
 @app.command("report")

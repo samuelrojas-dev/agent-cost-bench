@@ -29,6 +29,7 @@ from dowbench.runner.rate_limit import (
     RatePlan,
     plan,
 )
+from dowbench.runner.replay import RecordingProvider
 from dowbench.runner.store import EpisodeRecord, RunStore
 from dowbench.sut import Agent, load_agent, run_agent_episode
 
@@ -58,6 +59,9 @@ class RunInfo(BaseModel):
     git_commit: str | None
     provider: str
     simulated: bool
+    # True when the run was replayed from a cassette: real recorded numbers, but not an
+    # independent new result and never published as one (ADR 0015). Excludes simulated.
+    replayed: bool = False
     episodes_planned: int
     config: RunConfig
     # Requested model -> versions the provider reported serving (filled in as calls return).
@@ -200,23 +204,30 @@ def _execute_locked(
         raise RunExistsError(f"{store.run_dir} already has episodes; resume or rename the run")
     done = {r.episode_id for r in existing}
     price_of = {} if config.unpriced else model_prices(config, prices)
-    # Checked here, under the lock, so no caller can skip it and no parallel run can race it.
-    worst = estimate(config, specs, prices, done)
+    # Replay reads recorded responses: it makes no call, spends nothing, and is not rate
+    # limited or re-recorded (ADR 0015).
+    replaying = provider is not None and getattr(provider, "replaying", False)
     already = spent(store, config, prices)
-    check_budget(
-        worst_tokens=worst.worst_case_tokens,
-        worst_usd=worst.worst_case_usd,
-        already=already,
-        budget_usd=budget_usd,
-        budget_tokens=budget_tokens,
-        simulated=config.simulated,
-    )
+    if not replaying:
+        # Checked here, under the lock, so no caller can skip it and no parallel run races it.
+        worst = estimate(config, specs, prices, done)
+        check_budget(
+            worst_tokens=worst.worst_case_tokens,
+            worst_usd=worst.worst_case_usd,
+            already=already,
+            budget_usd=budget_usd,
+            budget_tokens=budget_tokens,
+            simulated=config.simulated,
+        )
 
     # Rate limiting applies to real providers; the mock has no quota (ADR 0014).
     limiter = None
     if config.rate_limit is not None and provider is not None and not provider.simulated:
         limiter = RateLimiter(config.rate_limit)
         provider = RateLimitedProvider(provider, limiter)
+    # Real runs always record a cassette so they can be replayed offline later (ADR 0015).
+    if provider is not None and not provider.simulated and not replaying:
+        provider = RecordingProvider(provider, store)
 
     info = RunInfo(
         run_name=config.run_name,
@@ -224,6 +235,7 @@ def _execute_locked(
         git_commit=_git_commit(),
         provider=provider.name if provider else config.provider,
         simulated=provider.simulated if provider else config.simulated,
+        replayed=replaying,
         episodes_planned=len(specs),
         config=config,
         served_model_versions=store.served_model_versions(),
@@ -274,6 +286,10 @@ def _run_pending(
         if limiter is not None:
             limiter.reserve_episode(per_episode_requests)  # stop between episodes on RPD
         attempt = uuid.uuid4().hex
+        # Recording and replay key their calls by episode and attempt (ADR 0015).
+        begin = getattr(provider, "begin_episode", None)
+        if begin is not None:
+            begin(spec.id, attempt)
         context = {"episode_id": spec.id, "model": spec.model, "attempt": attempt}
         record = _run_one(
             config, dataset, spec, provider, agent, functools.partial(store.append_call, context)

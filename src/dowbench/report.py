@@ -18,6 +18,12 @@ SIMULATED_BANNER = (
     "that the pipeline works and must not be published or compared with real runs."
 )
 
+REPLAYED_BANNER = (
+    "> **REPLAYED — not an independent result.** These numbers were replayed from a prior "
+    "real run's cassette (ADR 0015). They are real recorded data, but replaying does not "
+    "produce a new result and must not be counted as one."
+)
+
 
 def _num(value: float | None, pattern: str) -> str:
     return "n/a" if value is None else pattern.format(value)
@@ -58,6 +64,8 @@ def render(info: RunInfo, summary: RunSummary) -> str:
     lines = [f"# Results: {summary.run_name}", ""]
     if summary.simulated or info.simulated:
         lines += [SIMULATED_BANNER, ""]
+    elif info.replayed:
+        lines += [REPLAYED_BANNER, ""]
     lines += _table(
         ["", ""],
         [

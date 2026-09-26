@@ -57,9 +57,14 @@ def test_max_usd_per_token() -> None:
     assert _price().max_usd_per_token == pytest.approx(5.0 / 1_000_000)
 
 
-def test_default_table_has_only_simulated_mock_entry() -> None:
+def test_default_table_real_entries_cite_an_official_source() -> None:
     table = PriceTable.load()
     assert table.get("mock", "mock-1").simulated
+    real = [p for p in table._prices.values() if not p.simulated]
+    assert real
+    for price in real:
+        assert price.source.startswith("https://")
+        assert price.max_prompt_tokens is not None
     with pytest.raises(PricingError):
         table.get("anthropic", "unknown-model")
 

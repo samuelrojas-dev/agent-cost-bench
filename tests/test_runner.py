@@ -105,6 +105,8 @@ def test_pilot_run_writes_calls_episodes_and_summary(tmp_path: Path) -> None:
     assert len(episodes) == 40
     assert len(calls) == sum(e["turns"] for e in episodes)
     assert {c["episode_id"] for c in calls} <= {e["episode_id"] for e in episodes}
+    # The provider's raw usage is persisted per call and matches the normalized usage.
+    assert all(c["raw_usage"] == c["usage"] for c in calls)
 
     assert summary.simulated
     assert len(summary.attacks) == 20

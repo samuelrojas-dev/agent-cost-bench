@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -36,6 +36,9 @@ class CallRecord(BaseModel):
     usage: Usage
     tool_calls: int
     latency_s: float
+    # The provider's usage object as returned, kept so costs can be re-derived and the
+    # mapping of ADR 0002 audited without a new paid run.
+    raw_usage: dict[str, Any] = Field(default_factory=dict)
 
 
 class EpisodeResult(BaseModel):
@@ -97,6 +100,9 @@ def run_episode(
             return finish("censored", f"ceiling: {ceiling.max_total_tokens} tokens")
 
         response = provider.complete(request)
+        raw_usage = response.raw.get("usage")
+        if not provider.simulated and not raw_usage:
+            raise ValueError(f"{provider.name} returned no raw usage; results must be auditable")
         state.turns += 1
         state.usage += response.usage
         calls.append(
@@ -107,6 +113,7 @@ def run_episode(
                 usage=response.usage,
                 tool_calls=len(response.tool_calls),
                 latency_s=response.latency_s,
+                raw_usage=raw_usage or {},
             )
         )
 

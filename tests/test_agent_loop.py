@@ -138,3 +138,44 @@ def test_assistant_turn_provider_data_reaches_the_next_request() -> None:
     )
     assert result.status == "completed"
     assert probe.replayed == [{"turn": 1}]
+
+
+class _RawUsageProvider(MockProvider):
+    """A real (non-simulated) provider stand-in with a provider-shaped usage object."""
+
+    simulated = False
+
+    def __init__(self, raw_usage: dict[str, object]) -> None:
+        super().__init__()
+        self._raw_usage = raw_usage
+
+    def complete(self, request: Request) -> Response:
+        response = super().complete(request)
+        return response.model_copy(update={"raw": {"usage": self._raw_usage}})
+
+
+def _run_with(provider: MockProvider) -> EpisodeResult:
+    return run_episode(
+        provider,
+        model="mock-1",
+        system="s",
+        user_prompt="Summarize the doc.",
+        toolbox=ToolBox("fetch_doc"),
+        defenses=[],
+        ceiling=CEILING,
+    )
+
+
+def test_calls_keep_the_provider_raw_usage() -> None:
+    raw: dict[str, object] = {
+        "prompt_token_count": 65,
+        "candidates_token_count": 16,
+        "total_token_count": 81,
+    }
+    result = _run_with(_RawUsageProvider(raw))
+    assert [c.raw_usage for c in result.calls] == [raw, raw]
+
+
+def test_real_provider_without_raw_usage_is_refused() -> None:
+    with pytest.raises(ValueError, match="no raw usage"):
+        _run_with(_RawUsageProvider({}))

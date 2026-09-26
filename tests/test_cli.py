@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 from dowbench.cli import app
@@ -50,3 +51,11 @@ def test_run_rejects_unavailable_provider(tmp_path: Path) -> None:
     result = runner.invoke(app, ["run", PILOT, "--provider", "nope", "--out", str(tmp_path)])
     assert result.exit_code == 2
     assert "not available yet" in result.output
+
+
+@pytest.mark.parametrize("budget", ["nan", "-nan", "inf", "-1"])
+def test_run_rejects_non_finite_or_negative_budget(tmp_path: Path, budget: str) -> None:
+    result = runner.invoke(app, ["run", PILOT, "--out", str(tmp_path), "--budget-usd", budget])
+    assert result.exit_code == 2
+    assert "finite, non-negative" in result.output
+    assert not (tmp_path / "pilot-mock").exists()

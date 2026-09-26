@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated
@@ -128,6 +129,11 @@ def run_cmd(
     resume: Annotated[bool, typer.Option(help="Skip episodes already in the run dir")] = True,
 ) -> None:
     """Run the episode matrix and write calls.jsonl, episodes.jsonl and summary.json."""
+    if budget_usd is not None and not (math.isfinite(budget_usd) and budget_usd >= 0):
+        typer.echo(
+            f"--budget-usd must be a finite, non-negative number, got {budget_usd}", err=True
+        )
+        raise typer.Exit(2)
     config = _load_config(config_path, provider)
     dataset = load_dataset()
     prices = PriceTable.load()
@@ -144,7 +150,7 @@ def run_cmd(
     if not config.simulated and budget_usd is None:
         typer.echo("real providers require --budget-usd", err=True)
         raise typer.Exit(2)
-    if budget_usd is not None and worst.worst_case_usd > budget_usd:
+    if budget_usd is not None and not worst.worst_case_usd <= budget_usd:
         typer.echo(
             f"worst case ${worst.worst_case_usd:.4f} exceeds budget ${budget_usd:.4f}; "
             "lower the ceiling, the matrix, or raise the budget",

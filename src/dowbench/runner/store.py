@@ -70,6 +70,7 @@ class RunStore:
         self.calls_path = run_dir / "calls.jsonl"
         self.requests_path = run_dir / "requests.jsonl"
         self.episodes_path = run_dir / "episodes.jsonl"
+        self.cassette_path = run_dir / "cassette.jsonl"
         self.run_path = run_dir / "run.json"
         self.summary_path = run_dir / "summary.json"
 
@@ -87,6 +88,18 @@ class RunStore:
             row = {**context, "turn": call.turn, "request": sanitize(call.request_body)}
             with self.requests_path.open("a", encoding="utf-8") as fh:
                 fh.write(json.dumps(row, sort_keys=True) + "\n")
+
+    def append_cassette(self, row: dict[str, Any]) -> None:
+        """Append one recorded call to cassette.jsonl, sanitized (ADR 0009, ADR 0015)."""
+        self.run_dir.mkdir(parents=True, exist_ok=True)
+        with self.cassette_path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(sanitize(row), sort_keys=True) + "\n")
+
+    def load_cassette(self) -> list[dict[str, Any]]:
+        if not self.cassette_path.exists():
+            return []
+        with self.cassette_path.open(encoding="utf-8") as fh:
+            return [json.loads(line) for line in fh if line.strip()]
 
     def served_model_versions(self) -> dict[str, list[str]]:
         """Model versions the provider reported, per requested model, across all attempts."""

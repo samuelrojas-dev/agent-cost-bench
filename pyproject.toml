@@ -36,6 +36,9 @@ gemini = ["google-genai>=2.25,<3"]
 anthropic = ["anthropic>=1.8,<2"]
 dev = [
     "dowbench[gemini,anthropic]",
+    "hypothesis>=6",
+    "pre-commit>=3",
+    "pytest-cov>=5",
     "pytest>=8",
     "ruff>=0.16,<0.17",
     "mypy>=1.11",

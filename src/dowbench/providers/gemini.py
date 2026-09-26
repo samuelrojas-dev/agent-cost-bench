@@ -60,9 +60,10 @@ _REFUSALS = frozenset(
 # which the Developer API cannot count (ADR 0004).
 TEMPLATE_MARGIN_TOKENS = 64
 
-# A hung call must not block a run forever. No retries: a retried call that was billed
-# but not answered would be spent twice and recorded once (ADR 0005).
-REQUEST_TIMEOUT_S = 120
+# A hung call must not block a run forever, but a timeout that fires while the server is
+# still generating leaves a billed, unrecorded call: keep it long (ADR 0006). No retries:
+# a retried call that was billed but not answered is spent twice and recorded once.
+REQUEST_TIMEOUT_S = 600
 
 
 class _Models(Protocol):

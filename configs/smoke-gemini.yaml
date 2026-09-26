@@ -1,5 +1,6 @@
 # One-episode smoke test on Gemini's free tier: one benign task, no attack, no defense.
-# Unpriced (ADR 0008): reports tokens only. Run with --budget-tokens.
+# Unpriced (ADR 0008): reports tokens only. Run with --budget-tokens 1200. The ceiling is
+# above the ~400 tokens expected because the Gemini count bound is conservative (ADR 0004).
 run_name: smoke-gemini
 provider: gemini
 models: [gemini-3.5-flash-lite]
@@ -11,6 +12,6 @@ seed: 0
 ceiling:
   max_turns: 2
   max_tokens_per_call: 128
-  max_total_tokens: 400
+  max_total_tokens: 1200
 defenses:
   - name: none

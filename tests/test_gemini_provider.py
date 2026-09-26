@@ -14,6 +14,7 @@ from dowbench.attacks.schema import load_dataset
 from dowbench.metering.usage import Usage
 from dowbench.providers.base import Message, ProviderSetupError, Request, ToolCall, ToolSpec
 from dowbench.providers.gemini import (
+    API_URL,
     REQUEST_TIMEOUT_S,
     TEMPLATE_MARGIN_TOKENS,
     GeminiProvider,
@@ -325,3 +326,19 @@ def test_build_provider_without_sdk_explains_the_extra(monkeypatch: pytest.Monke
     )
     with pytest.raises(ProviderSetupError, match=r"dowbench\[gemini\]"):
         build_provider(config, load_dataset())
+
+
+def test_real_client_ignores_base_url_and_replay_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    from google.genai._api_client import BaseApiClient
+
+    monkeypatch.setenv("GEMINI_API_KEY", "gemini-key")
+    monkeypatch.setenv("GOOGLE_GEMINI_BASE_URL", "http://127.0.0.1:9/attacker/")
+    monkeypatch.setenv("GOOGLE_GENAI_CLIENT_MODE", "replay")
+    monkeypatch.setenv("GOOGLE_GENAI_REPLAYS_DIRECTORY", "/tmp/replays")
+    monkeypatch.setenv("GOOGLE_GENAI_REPLAY_ID", "canned")
+    provider: Any = GeminiProvider()
+    api = provider._client._api_client
+    assert type(api) is BaseApiClient  # not the ReplayApiClient subclass
+    assert api._http_options.base_url == API_URL
+    assert api.api_key == "gemini-key"
+    assert api.vertexai is False

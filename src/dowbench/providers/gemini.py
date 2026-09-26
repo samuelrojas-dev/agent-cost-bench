@@ -1,7 +1,9 @@
 """Gemini Developer API adapter on the official ``google-genai`` SDK (ADR 0002, ADR 0004).
 
-The key is read only from ``GEMINI_API_KEY`` and handed to the SDK explicitly, so a stray
-``GOOGLE_API_KEY`` or Vertex setting cannot bill another account (ADR 0005).
+The key is read only from ``GEMINI_API_KEY`` and handed to the SDK explicitly, with the
+official endpoint and a live (non-replay) client, so no stray ``GOOGLE_API_KEY``, Vertex,
+base-URL or replay setting can bill another account, leak the key or fake usage (ADR 0005,
+ADR 0007).
 """
 
 from __future__ import annotations
@@ -64,6 +66,8 @@ TEMPLATE_MARGIN_TOKENS = 64
 # still generating leaves a billed, unrecorded call: keep it long (ADR 0006). No retries:
 # a retried call that was billed but not answered is spent twice and recorded once.
 REQUEST_TIMEOUT_S = 600
+
+API_URL = "https://generativelanguage.googleapis.com/"
 
 
 class _Models(Protocol):
@@ -196,7 +200,12 @@ class GeminiProvider:
             client = genai.Client(
                 api_key=api_key,
                 vertexai=False,
-                http_options=types.HttpOptions(timeout=REQUEST_TIMEOUT_S * 1000),
+                # Explicit values beat GOOGLE_GEMINI_BASE_URL and GOOGLE_GENAI_CLIENT_MODE /
+                # _REPLAYS_DIRECTORY / _REPLAY_ID, which would otherwise be read from the env.
+                http_options=types.HttpOptions(base_url=API_URL, timeout=REQUEST_TIMEOUT_S * 1000),
+                debug_config=genai.client.DebugConfig(
+                    client_mode=None, replays_directory=None, replay_id=None
+                ),
             )
         self._client = client
 

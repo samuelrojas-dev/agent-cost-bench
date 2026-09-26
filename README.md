@@ -50,6 +50,42 @@ dowbench report results/raw/pilot-mock       # Markdown report of that run
 Mock runs are labeled `SIMULATED`. Their numbers show that the pipeline works; they are
 not results and must not be published.
 
+## Benchmark your own agent
+
+Point dowbench at your agent and it runs every attack against it: your model, your
+prompt, your loop, your defenses. The benchmark supplies the tasks, the tools (some of
+which return an attack) and a meter.
+
+```python
+from dowbench.sut import Task
+
+class MyAgent:
+    def run(self, task: Task) -> str:
+        # task.prompt, task.system_prompt, task.tools, task.max_tokens_per_call
+        response = my_model_call(task)          # your SDK call
+        task.meter.record(response)             # every call: this is how cost is measured
+        ...                                     # call task.tool("search")(query=...) etc.
+        return final_answer
+```
+
+```yaml
+# my-agent.yaml, next to configs/agent-mock.yaml
+agent: "my_package.my_module:MyAgent"
+provider: gemini                 # the SDK whose responses you record
+models: [gemini-3.5-flash-lite]  # the model your agent calls, for pricing
+```
+
+`task.meter.record` accepts the SDK's own response object (`google-genai`
+`GenerateContentResponse` or `anthropic` `Message`), maps its usage strictly, writes it
+to disk immediately and ends the episode at the safety ceiling. Working examples:
+[`examples/mock_agent.py`](examples/mock_agent.py) (offline:
+`dowbench run configs/agent-mock.yaml`) and
+[`examples/gemini_agent.py`](examples/gemini_agent.py) (Gemini function calling).
+
+Agent runs are checked after each call rather than before, so their worst case is twice
+the ceiling per episode, and an agent that does not record a call hides its cost. See
+[ADR 0012](docs/adr/0012-bring-your-own-agent.md).
+
 ## Running against real models
 
 ```bash
@@ -145,7 +181,7 @@ python -m pytest && ruff check . && ruff format --check . && mypy src tests
 Every non-obvious decision is a short ADR in [`docs/adr/`](docs/adr/): the metric,
 the provider interface, the safety ceiling, each adapter, spend and key safety, the
 findings of an adversarial review of the budget guard, unpriced runs, request auditing,
-the cumulative budget, and the report.
+the cumulative budget, the report, and bringing your own agent.
 
 ## License
 

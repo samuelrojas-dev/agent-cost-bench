@@ -1,4 +1,4 @@
-"""Command-line interface: list, estimate, run."""
+"""Command-line interface: list, estimate, run, report."""
 
 from __future__ import annotations
 
@@ -15,6 +15,8 @@ from dowbench.defenses import NO_DEFENSE, REGISTRY
 from dowbench.metering.pricing import PriceTable, PricingError
 from dowbench.metrics import RunSummary
 from dowbench.providers.base import ProviderSetupError
+from dowbench.report import load as load_report
+from dowbench.report import render as render_report
 from dowbench.runner.budget import BudgetError, Spend, check_budget, spent
 from dowbench.runner.config import RunConfig
 from dowbench.runner.execute import (
@@ -219,3 +221,23 @@ def run_cmd(
         raise typer.Exit(1) from None
     _print_summary(summary)
     typer.echo(f"results: {out / config.run_name}")
+
+
+@app.command("report")
+def report_cmd(
+    run_dir: Annotated[Path, typer.Argument(exists=True, file_okay=False, help="A run directory")],
+    output: Annotated[
+        Path | None, typer.Option("--output", "-o", help="Write Markdown here, not stdout")
+    ] = None,
+) -> None:
+    """Render run.json and summary.json as a Markdown report. Makes no calls."""
+    try:
+        text = render_report(*load_report(run_dir))
+    except (FileNotFoundError, ValidationError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from None
+    if output is None:
+        typer.echo(text, nl=False)
+    else:
+        output.write_text(text, encoding="utf-8")
+        typer.echo(f"report: {output}")

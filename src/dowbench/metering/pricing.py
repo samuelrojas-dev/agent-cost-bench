@@ -73,6 +73,9 @@ class PriceTable:
         data = yaml.safe_load(path.read_text(encoding="utf-8"))
         return cls(_PriceFile.model_validate(data).prices)
 
+    def entries(self) -> list[ModelPrice]:
+        return list(self._prices.values())
+
     def get(self, provider: str, model: str) -> ModelPrice:
         try:
             return self._prices[(provider, model)]

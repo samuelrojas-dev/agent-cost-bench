@@ -56,7 +56,7 @@ def test_max_usd_per_token() -> None:
     assert _price().max_usd_per_token == pytest.approx(5.0 / 1_000_000)
 
 
-def test_default_table_has_only_simulated_mock_entry() -> None:
+def test_default_table_marks_mock_as_simulated() -> None:
     table = PriceTable.load()
     assert table.get("mock", "mock-1").simulated
     with pytest.raises(PricingError):
@@ -66,3 +66,12 @@ def test_default_table_has_only_simulated_mock_entry() -> None:
 def test_duplicate_entries_rejected() -> None:
     with pytest.raises(ValueError, match="duplicate"):
         PriceTable([_price(), _price()])
+
+
+def test_real_prices_cite_an_official_source() -> None:
+    real = [p for p in PriceTable.load().entries() if not p.simulated]
+    assert real
+    for price in real:
+        assert price.source.startswith(
+            ("https://platform.claude.com/", "https://ai.google.dev/")
+        ), price

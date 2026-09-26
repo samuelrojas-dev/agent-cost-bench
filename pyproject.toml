@@ -1,17 +1,35 @@
 [build-system]
-requires = ["hatchling>=1.25"]
+requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [project]
 name = "dowbench"
 version = "0.0.1"
 description = "Reproducible benchmark of denial-of-wallet attacks and defenses for LLM agents"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 requires-python = ">=3.11"
+keywords = ["llm", "agents", "security", "denial-of-wallet", "benchmark", "red-teaming", "cost"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Security",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
+]
 dependencies = [
     "pydantic>=2.7,<3",
     "pyyaml>=6.0",
     "typer>=0.12",
 ]
+
+[project.urls]
+Repository = "https://github.com/samuelrojas-dev/agent-cost-bench"
+Issues = "https://github.com/samuelrojas-dev/agent-cost-bench/issues"
 
 [project.optional-dependencies]
 gemini = ["google-genai>=2.25,<3"]

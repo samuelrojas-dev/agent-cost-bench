@@ -189,7 +189,10 @@ calling a model) if the code has changed how a request is built.
 
 - **An attack** is a YAML entry in `seed.yaml`: `id`, `family`, `vector`
   (`tool_result` or `user_prompt`), the paired `benign_task`, `payload`,
-  `expected_signal` and a `source`.
+  `expected_signal` and a `source`. A `tool_result` payload may use `{n}` / `{next}`
+  (per-call index), `payload_growth` and a `relay_tool`
+  ([ADR 0016](docs/adr/0016-amplifying-attacks-proposal.md)); its attacks are held to the
+  bulk-only guard in `tests/test_amplifying_attacks.py`.
 - **A defense** is a subclass of `Defense` (`src/dowbench/defenses/base.py`) with any of
   three hooks — `before_call`, `after_call`, `on_tool_result` — registered in
   `src/dowbench/defenses/__init__.py`.

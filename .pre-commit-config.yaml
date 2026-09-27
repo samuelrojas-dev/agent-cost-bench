@@ -21,6 +21,19 @@ repos:
       - id: mypy
         name: mypy
         entry: mypy src tests
-        language: system
+        # An isolated env with mypy and the project's typing dependencies, so the
+        # pydantic.mypy plugin (tool.mypy) and third-party imports resolve without needing
+        # the contributor's venv on PATH.
+        language: python
+        additional_dependencies:
+          - mypy>=1.11
+          - pydantic>=2.7,<3
+          - pyyaml>=6.0
+          - typer>=0.12
+          - types-PyYAML
+          - google-genai>=2.25,<3
+          - anthropic>=1.8,<2
+          - pytest>=8
+          - hypothesis>=6
         types: [python]
         pass_filenames: false

@@ -1,4 +1,4 @@
-"""Budget-style defenses: cap tokens, turns and repeated tool calls."""
+"""Budget-style defenses: cap tokens, turns, tool calls and tool-result size."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 from dowbench.agent.state import EpisodeState
 from dowbench.defenses.base import Abort, Defense
-from dowbench.providers.base import Request, Response
+from dowbench.providers.base import Request, Response, ToolCall
 
 
 def _require_positive(**values: int) -> None:
@@ -55,17 +55,21 @@ class TurnLimit(Defense):
 
 @dataclass(frozen=True)
 class LoopDetect(Defense):
-    """Stops the agent when it repeats a tool call or overuses one tool."""
+    """Stops the agent when it repeats a tool call, overuses one tool or, if
+    ``max_total_tool_calls`` is set, makes too many tool calls in all (ADR 0017)."""
 
     name = "loop_detect"
     max_identical_calls: int = 2
     max_calls_per_tool: int = 4
+    max_total_tool_calls: int | None = None
 
     def __post_init__(self) -> None:
         _require_positive(
             max_identical_calls=self.max_identical_calls,
             max_calls_per_tool=self.max_calls_per_tool,
         )
+        if self.max_total_tool_calls is not None:
+            _require_positive(max_total_tool_calls=self.max_total_tool_calls)
 
     def after_call(self, response: Response, state: EpisodeState) -> Abort | None:
         calls = [*state.tool_calls, *response.tool_calls]
@@ -76,4 +80,27 @@ class LoopDetect(Defense):
                 return Abort(f"identical call repeated: {call.signature()}")
             if per_tool[call.name] > self.max_calls_per_tool:
                 return Abort(f"tool {call.name} called more than {self.max_calls_per_tool} times")
+        if self.max_total_tool_calls is not None and len(calls) > self.max_total_tool_calls:
+            return Abort(f"more than {self.max_total_tool_calls} tool calls in all")
         return None
+
+
+@dataclass(frozen=True)
+class ResultCap(Defense):
+    """Truncates each tool result to ``max_result_chars`` characters (ADR 0017).
+
+    Characters, not tokens: the cap must mean the same for every provider and cost nothing
+    to apply. The head is kept, where a paginated or padded result usually has its answer.
+    """
+
+    name = "result_cap"
+    max_result_chars: int = 2000
+
+    def __post_init__(self) -> None:
+        _require_positive(max_result_chars=self.max_result_chars)
+
+    def on_tool_result(self, call: ToolCall, result: str, state: EpisodeState) -> str:
+        cut = len(result) - self.max_result_chars
+        if cut <= 0:
+            return result
+        return f"{result[: self.max_result_chars]}\n[result_cap: {cut} characters removed]"

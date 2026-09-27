@@ -27,7 +27,7 @@ def test_list_defenses_includes_baseline() -> None:
 def test_estimate_prints_worst_case_and_simulated_notice(tmp_path: Path) -> None:
     result = runner.invoke(app, ["estimate", PILOT, "--out", str(tmp_path)])
     assert result.exit_code == 0
-    assert "worst case: 2,200,000 tokens" in result.output
+    assert "worst case: 3,800,000 tokens" in result.output
     assert "SIMULATED" in result.output
 
 

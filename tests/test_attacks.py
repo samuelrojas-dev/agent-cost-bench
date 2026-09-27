@@ -11,7 +11,7 @@ from dowbench.providers.base import ToolCall
 def test_seed_dataset_loads() -> None:
     dataset = load_dataset()
     assert len(dataset.benign) == 5
-    assert len(dataset.attacks) == 6
+    assert len(dataset.attacks) == 14
     assert {a.family for a in dataset.attacks} == {
         "tool_loop",
         "output_flood",

@@ -5,6 +5,7 @@
 
 # Results
 results/raw/
+results/replays/
 
 # Python
 __pycache__/

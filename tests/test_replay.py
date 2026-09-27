@@ -310,3 +310,29 @@ def test_committed_fixture_cassette_replays_to_its_recorded_summary(tmp_path: Pa
     )
     replayed = tmp_path / summary.run_name / "summary.json"
     assert _sha(replayed) == _sha(FIXTURE / "summary.json")
+
+
+# --- regression: a rate-limited run with an orphan attempt still replays exactly (ADR 0015) ---
+
+REGRESSION = Path(__file__).parent / "fixtures" / "replay-regression"
+
+
+@pytest.mark.skipif(not REGRESSION.exists(), reason="fixture not generated")
+def test_rate_limited_run_with_an_orphan_attempt_replays_to_identical_hash(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # This fixture's config has a tight rate_limit and its cassette has an orphan attempt
+    # (no episode row) spliced before the completed one. It fails if either bug returns:
+    #   bug 1 (replay wrapped in the rate limiter) -> execute builds a RateLimiter, which this
+    #          guard turns into an AssertionError instead of a real-time sleep;
+    #   bug 2 (load_cassette matches by episode_id only) -> the orphan's calls are replayed
+    #          first and the loop drifts (CassetteDriftError) instead of reproducing the run.
+    def _boom(*_a: object, **_k: object) -> object:
+        raise AssertionError("replay must not construct a RateLimiter: it makes no network call")
+
+    monkeypatch.setattr("dowbench.runner.execute.RateLimiter", _boom)
+    summary = replay_run(
+        REGRESSION, out_dir=tmp_path, prices=PriceTable.load(), dataset=load_dataset()
+    )
+    replayed = tmp_path / summary.run_name / "summary.json"
+    assert _sha(replayed) == _sha(REGRESSION / "summary.json")

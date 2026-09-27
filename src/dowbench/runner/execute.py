@@ -220,9 +220,16 @@ def _execute_locked(
             simulated=config.simulated,
         )
 
-    # Rate limiting applies to real providers; the mock has no quota (ADR 0014).
+    # Rate limiting applies to real providers; the mock has no quota (ADR 0014). Replay makes
+    # no network call, so it is never rate limited: wrapping it would make it sleep on real
+    # time reproducing a recorded run (ADR 0015).
     limiter = None
-    if config.rate_limit is not None and provider is not None and not provider.simulated:
+    if (
+        config.rate_limit is not None
+        and provider is not None
+        and not provider.simulated
+        and not replaying
+    ):
         limiter = RateLimiter(config.rate_limit)
         provider = RateLimitedProvider(provider, limiter)
     # Every run records a cassette so it can be replayed offline later; a replayed run keeps

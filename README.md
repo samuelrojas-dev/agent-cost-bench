@@ -132,21 +132,8 @@ dowbench replay results/raw/<run>        # re-runs the episodes from the cassett
 
 Replay reproduces the run's `summary.json` byte for byte, so its headline numbers are
 verifiable by hashing that file; replay refuses (instead of calling a model) if the code has
-changed how a request is built (ADR 0015).
-
-**Pilot (run locally, not published here yet).** A first real run — one model
-(`gemini-3.5-flash-lite`), 4 attacks × 4 defenses, 1 repetition per cell — was replayed and
-reproduced its `summary.json` byte for byte, sha256:
-
-```
-b56909a8398d8462a9d3d8b7a649881983c043216a03045407367bf61090944e
-```
-
-Its attack success rate was **0 % in every cell**: no attack reached the *A* ≥ 5 threshold
-against this model, so no defense had to intervene. That is the whole of what this pilot
-shows — one model, one repetition — not that these attacks are weak or these defenses
-strong. The run directory and its cassette are not in this repository yet; the hash above is
-the artifact to verify against once they are.
+changed how a request is built (ADR 0015). The pilot runs so far, their findings and their
+verification hashes are collected in [Results (pilot)](#results-pilot) below.
 
 ## How attacks are scored
 
@@ -172,6 +159,22 @@ Full definitions and the reasons behind them are in
 > offline from them and reproduces its `summary.json` byte for byte, so anyone can check
 > the numbers — see the replay commands below. Early pilots at `n = 1`–`5`: read them as
 > directional, not settled rates.
+
+**Pilot v1 (antecedent)** — the first real run: one model (`gemini-3.5-flash-lite`),
+4 attacks × 4 defenses, one repetition per cell, replay-verified — its `summary.json`
+reproduces byte for byte to sha256:
+
+```
+b56909a8398d8462a9d3d8b7a649881983c043216a03045407367bf61090944e
+```
+
+Unlike the two runs below, this earlier pilot's run directory is not committed under
+`results/cassettes/`; the sha256 above is the artifact to verify it against.
+Its attack success rate was **0 % in every cell**: no attack reached the *A* ≥ 5 threshold
+against this model, so no defense had to intervene — one model, one repetition, not evidence
+that these attacks are weak or these defenses strong. This null result is what motivated
+[ADR 0016](docs/adr/0016-amplifying-attacks-proposal.md) to design stronger, *amplifying*
+attacks; **Pilot v2** below is the first run of those.
 
 **Pilot v2** — 75 episodes, 10 attacks × 5 defenses, one repeat (`configs/pilot-gemini-v2.yaml`),
 replay-verified (hash `12abac6a…166dcad`). Of the ten attacks, **`bloat-verify-001` is the only one

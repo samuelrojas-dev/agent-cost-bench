@@ -21,7 +21,14 @@ Signal = Literal[
     "long_output",
     "long_reasoning",
     "context_growth",
+    "alternating_tool_calls",
+    "growing_arguments",
 ]
+
+# Per-call placeholders a tool_result payload may use (ADR 0016): ``{n}`` is the 1-based
+# index of the call to an injected tool, ``{next}`` is ``n + 1``.
+PLACEHOLDERS = ("{n}", "{next}")
+_MIN_MARKER = 16
 
 
 class BenignTask(BaseModel):
@@ -47,7 +54,12 @@ class Attack(BaseModel):
     benign_task: str
     payload: str = Field(min_length=1)
     payload_repeat: int = Field(default=1, ge=1, le=1000)
+    # Extra repeats per later call: call ``n`` repeats the payload
+    # ``payload_repeat + payload_growth * (n - 1)`` times (ADR 0016).
+    payload_growth: int = Field(default=0, ge=0, le=1000)
     target_tool: str | None = None
+    # A second tool whose results carry the same payload, sharing the call counter.
+    relay_tool: str | None = None
     expected_signal: Signal
     source: str = Field(min_length=1, description="Where the attack pattern comes from")
 
@@ -62,9 +74,47 @@ class Attack(BaseModel):
             raise ValueError(f"attack {self.id}: unknown tool {self.target_tool!r}")
         return self
 
+    @model_validator(mode="after")
+    def _per_call_fields_need_tool_result(self) -> Attack:
+        per_call = (
+            self.payload_growth > 0
+            or self.relay_tool is not None
+            or any(p in self.payload for p in PLACEHOLDERS)
+        )
+        if per_call and self.vector != "tool_result":
+            raise ValueError(
+                f"attack {self.id}: placeholders, payload_growth and relay_tool "
+                "need vector tool_result"
+            )
+        if self.relay_tool is not None and (
+            self.relay_tool not in TOOL_NAMES or self.relay_tool == self.target_tool
+        ):
+            raise ValueError(f"attack {self.id}: bad relay_tool {self.relay_tool!r}")
+        if self.marker != self.payload and len(self.marker.strip()) < _MIN_MARKER:
+            raise ValueError(
+                f"attack {self.id}: payload needs {_MIN_MARKER}+ characters before its "
+                "first placeholder"
+            )
+        return self
+
+    def render(self, n: int = 1) -> str:
+        """The payload as it appears on the ``n``-th call to an injected tool."""
+        text = self.payload.replace("{next}", str(n + 1)).replace("{n}", str(n))
+        return "\n".join([text] * (self.payload_repeat + self.payload_growth * (n - 1)))
+
     @property
     def rendered_payload(self) -> str:
-        return "\n".join([self.payload] * self.payload_repeat)
+        return self.render(1)
+
+    @property
+    def marker(self) -> str:
+        """Payload text before its first placeholder: the same on every call, so the mock
+        provider can recognise the attack in its context."""
+        cut = min(
+            (i for p in PLACEHOLDERS if (i := self.payload.find(p)) >= 0),
+            default=len(self.payload),
+        )
+        return self.payload[:cut]
 
 
 class Dataset(BaseModel):

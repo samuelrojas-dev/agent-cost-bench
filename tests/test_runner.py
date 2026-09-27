@@ -70,8 +70,8 @@ def test_episode_ids_are_stable_and_sensitive_to_config() -> None:
 
 def test_plan_has_benign_and_attack_episodes_per_defense() -> None:
     specs = plan_episodes(_config(repeats=2), load_dataset())
-    # 5 benign + 6 attacks, 4 defenses, 2 repeats
-    assert len(specs) == 11 * 4 * 2
+    # 5 benign + 14 attacks, 4 defenses, 2 repeats
+    assert len(specs) == 19 * 4 * 2
 
 
 def test_unknown_attack_id_rejected() -> None:
@@ -113,14 +113,14 @@ def test_pilot_run_writes_calls_episodes_and_summary(tmp_path: Path) -> None:
 
     episodes = [json.loads(line) for line in (run_dir / "episodes.jsonl").read_text().splitlines()]
     calls = [json.loads(line) for line in (run_dir / "calls.jsonl").read_text().splitlines()]
-    assert len(episodes) == 44
+    assert len(episodes) == 76
     assert len(calls) == sum(e["turns"] for e in episodes)
     assert {c["episode_id"] for c in calls} <= {e["episode_id"] for e in episodes}
     # The provider's raw usage is persisted per call and matches the normalized usage.
     assert all(c["raw_usage"] == c["usage"] for c in calls)
 
     assert summary.simulated
-    assert len(summary.attacks) == 24
+    assert len(summary.attacks) == 56
     assert all(o.amplification is not None for o in summary.attacks)
     assert json.loads((run_dir / "summary.json").read_text())["run_name"] == "pilot-mock"
     assert json.loads((run_dir / "run.json").read_text())["simulated"] is True
@@ -139,7 +139,7 @@ def test_resume_skips_completed_episodes(tmp_path: Path) -> None:
     first = _execute(config, tmp_path)
     second = _execute(config, tmp_path)
     lines = (tmp_path / "pilot-mock" / "episodes.jsonl").read_text().splitlines()
-    assert len(lines) == 44
+    assert len(lines) == 76
     assert first == second
 
 

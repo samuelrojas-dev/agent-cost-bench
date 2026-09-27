@@ -84,3 +84,33 @@ def test_context_growth_fetches_extra_pages_then_answers() -> None:
         Message(role="tool", content=MARKER, tool_call_id="c2"),
     ]
     assert mock.complete(_request(*messages)).stop_reason == "end_turn"
+
+
+def test_alternating_calls_switch_tools_with_fresh_arguments() -> None:
+    mock = MockProvider([(MARKER, "alternating_tool_calls")])
+    messages = list(_after_tool(MARKER))
+    first = mock.complete(_request(*messages)).tool_calls[0]
+    messages += [
+        Message(role="assistant", tool_calls=[first]),
+        Message(role="tool", content=MARKER, tool_call_id=first.id),
+    ]
+    second = mock.complete(_request(*messages)).tool_calls[0]
+    assert first.name == "search"
+    assert second.name == "fetch_doc"
+    assert first.signature() != second.signature()
+    assert second.arguments["doc_id"] == "ref-3"
+
+
+def test_growing_arguments_paste_the_previous_result() -> None:
+    mock = MockProvider([(MARKER, "growing_arguments")])
+    result = f"long previous result {MARKER}"
+    response = mock.complete(_request(*_after_tool(result)))
+    assert response.tool_calls[0].arguments["doc_id"] == result
+
+
+def test_growing_arguments_are_cut_off_at_max_tokens() -> None:
+    mock = MockProvider([(MARKER, "growing_arguments")])
+    response = mock.complete(_request(*_after_tool(MARKER + " x" * 400), max_tokens=50))
+    assert response.stop_reason == "max_tokens"
+    assert not response.tool_calls
+    assert response.usage.output_tokens == 50

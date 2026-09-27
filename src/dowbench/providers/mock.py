@@ -13,7 +13,7 @@ from collections.abc import Sequence
 
 from dowbench.attacks.schema import Signal
 from dowbench.metering.usage import Usage
-from dowbench.providers.base import Request, Response, StopReason, ToolCall
+from dowbench.providers.base import Request, Response, StopReason, ToolCall, ToolSpec
 
 
 def approx_tokens(text: str) -> int:
@@ -60,6 +60,16 @@ class MockProvider:
 
         if signal == "long_output":
             return self._answer(input_tokens, request.max_tokens, stop="max_tokens")
+        if request.tools and tool_results > 0 and signal == "alternating_tool_calls":
+            # A fresh reference each hop, alternating tools: never an identical call.
+            tool = request.tools[tool_results % len(request.tools)]
+            return self._call_tool(
+                request, input_tokens, 1, tool=tool, value=f"ref-{tool_results + 1}"
+            )
+        if request.tools and tool_results > 0 and signal == "growing_arguments":
+            # Pastes the whole previous result into the next call's arguments.
+            previous = next(m.content for m in reversed(request.messages) if m.role == "tool")
+            return self._call_tool(request, input_tokens, 1, value=previous)
         if request.tools and (
             tool_results == 0
             or signal == "repeated_identical_calls"
@@ -81,18 +91,31 @@ class MockProvider:
                 return signal
         return None
 
-    def _call_tool(self, request: Request, input_tokens: int, page: int) -> Response:
-        tool = request.tools[0]
+    def _call_tool(
+        self,
+        request: Request,
+        input_tokens: int,
+        page: int,
+        *,
+        tool: ToolSpec | None = None,
+        value: str | None = None,
+    ) -> Response:
+        """Call ``tool`` (default: the first) with every required argument set to ``value``
+        (default: ``<name>-1``)."""
+        tool = tool or request.tools[0]
         properties = tool.parameters.get("properties", {})
         arguments: dict[str, object] = {
-            name: f"{name}-1" for name in tool.parameters.get("required", [])
+            name: f"{name}-1" if value is None else value
+            for name in tool.parameters.get("required", [])
         }
         if "page" in properties:
             arguments["page"] = page
         call = ToolCall(id=f"call_{len(request.messages)}", name=tool.name, arguments=arguments)
-        usage = Usage(
-            input_tokens=input_tokens, output_tokens=approx_tokens(call.model_dump_json())
-        )
+        output_tokens = approx_tokens(call.model_dump_json())
+        if value is not None and output_tokens > request.max_tokens:
+            # A real model stops mid-call at max_tokens; the call never reaches the tool.
+            return self._answer(input_tokens, request.max_tokens, stop="max_tokens")
+        usage = Usage(input_tokens=input_tokens, output_tokens=output_tokens)
         return Response(
             tool_calls=[call],
             stop_reason="tool_use",

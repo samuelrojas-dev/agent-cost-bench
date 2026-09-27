@@ -23,10 +23,15 @@ rate_limit:
   rpm: 12
   tpm: 250000
   rpd: 500
+# Ceiling deliberately LOWER than pilot v1 (which is 12 turns / 1024 per call / 50000 total)
+# to keep the worst case within budget and two RPD days (ADR 0014): estimate is $3.00 worst
+# case and 900 requests across 2 days. Because the ceiling is lower, any episode that would
+# exceed 6 turns or 16000 total tokens is censored, and dowbench reports its cost and
+# amplification as a LOWER BOUND (ADR 0003) — not comparable as a maximum with pilot v1.
 ceiling:
-  max_turns: 12
-  max_tokens_per_call: 1024
-  max_total_tokens: 50000
+  max_turns: 6
+  max_tokens_per_call: 512
+  max_total_tokens: 16000
 defenses:
   - name: none
   - name: token_budget

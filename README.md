@@ -13,8 +13,10 @@ judge's opinion. It also charges each defense for what it costs on benign tasks,
 defense that blocks everything does not win.
 
 > **Status: alpha.** The harness, safety rails and adapters for Gemini and Claude work
-> and are tested. No benchmark results have been published yet: numbers will appear here
-> only when they come from real, reproducible runs.
+> and are tested. Preliminary findings from pilot runs are published in
+> [Results (pilot)](#results-pilot) below — replay-verified and reproducible, but still
+> early pilots (`n = 1`–`5`): read them as directional, not settled rates. All numbers come
+> from real, reproducible runs.
 
 ## Why another tool
 

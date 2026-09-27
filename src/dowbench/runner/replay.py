@@ -226,16 +226,31 @@ class ReplayProvider:
 
 
 def load_cassette(store: RunStore) -> dict[str, list[Interaction]]:
-    """Read a run's cassette, grouped by episode in recorded order."""
+    """Read a run's cassette, keyed by episode, keeping only the attempt that completed.
+
+    A run dir can hold more than one attempt of the same episode: an interrupted attempt
+    leaves its calls in the cassette but never writes an episode row (ADR 0007). Grouping by
+    ``episode_id`` alone would splice an orphan attempt's calls before the good one and make
+    replay drift, so the cassette is matched by ``(episode_id, attempt)`` and only the attempt
+    named in ``episodes.jsonl`` (the one that completed) is kept (ADR 0015).
+    """
     rows = store.load_cassette()
     if not rows:
         raise FileNotFoundError(
             f"{store.cassette_path} has no recorded calls; only real runs write a cassette"
         )
+    # episode -> the attempt that produced its episode row; orphan attempts are absent here.
+    completed: dict[str, str] = {r.episode_id: r.attempt for r in store.load_episodes()}
     by_episode: dict[str, list[Interaction]] = defaultdict(list)
     for row in rows:
         interaction = Interaction.model_validate(row)
-        by_episode[interaction.episode_id].append(interaction)
+        if completed.get(interaction.episode_id) == interaction.attempt:
+            by_episode[interaction.episode_id].append(interaction)
+    if not by_episode:
+        raise FileNotFoundError(
+            f"{store.cassette_path} has no completed attempt to replay; every recorded attempt "
+            "is orphaned (no episode row)"
+        )
     return dict(by_episode)
 
 

@@ -43,7 +43,9 @@ def main() -> None:
         execute(config, dataset, provider=RealishProvider(), prices=PriceTable.load(), out_dir=out)
         run_dir = out / config.run_name
         FIXTURE.mkdir(parents=True, exist_ok=True)
-        for name in ("run.json", "cassette.jsonl", "summary.json"):
+        # episodes.jsonl is needed too: replay matches the cassette by (episode_id, attempt)
+        # and reads it to keep only the completed attempt (ADR 0015).
+        for name in ("run.json", "cassette.jsonl", "episodes.jsonl", "summary.json"):
             shutil.copyfile(run_dir / name, FIXTURE / name)
     print(f"wrote fixture to {FIXTURE}")
 

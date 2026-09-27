@@ -1,7 +1,7 @@
 {
   "run_name": "pilot-mock",
   "dowbench_version": "0.0.1",
-  "git_commit": "1c56d9fc015c775c78abaeb91bbd181833962434",
+  "git_commit": "292f84a9a2e52cb87f163fad5ab3caba1ae4beea",
   "provider": "mock",
   "simulated": false,
   "replayed": false,

@@ -167,10 +167,10 @@ Full definitions and the reasons behind them are in
 ## Results (pilot)
 
 > **Provenance.** The numbers below come from the maintainer's **local** runs on
-> `gemini-3.5-flash-lite`; they were **not reproduced in CI or in this repository** (the run
-> directories and cassettes are not committed). Each run was replayed offline and reproduced
-> its `summary.json` byte for byte, so the numbers are verifiable by anyone who has the run
-> directory — see the replay commands below. Early pilots at `n = 1`–`5`: read them as
+> `gemini-3.5-flash-lite`; they were **not reproduced in CI**. The files replay needs for both
+> runs are committed under [`results/cassettes/`](results/cassettes/). Each run replays
+> offline from them and reproduces its `summary.json` byte for byte, so anyone can check
+> the numbers — see the replay commands below. Early pilots at `n = 1`–`5`: read them as
 > directional, not settled rates.
 
 **Pilot v2** — 75 episodes, 10 attacks × 5 defenses, one repeat (`configs/pilot-gemini-v2.yaml`),
@@ -201,17 +201,18 @@ benign baseline cost measured *in that same run*; the pattern — four defenses 
 
 ### Reproduce these numbers (offline, no key, no spend)
 
-With the run directories in place, replay reproduces each `summary.json` byte for byte, so
-the hashes above are verifiable without spending quota:
+Each directory under `results/cassettes/` holds what replay reads (`cassette.jsonl`,
+`run.json`, `episodes.jsonl`) plus the recorded `summary.json`. Replay reproduces that
+`summary.json` byte for byte, so the hashes above can be checked without spending quota:
 
 ```bash
-dowbench replay results/raw/pilot-gemini-flash-lite-v2   # pilot v2   → hash 12abac6a…166dcad
-dowbench replay results/raw/focus-bloat-verify           # focus run  → hash 5ac674d8…4d7f7ac
+dowbench replay results/cassettes/pilot-v2             # pilot v2   → hash 12abac6a…166dcad
+dowbench replay results/cassettes/focus-bloat-verify   # focus run  → hash 5ac674d8…4d7f7ac
+sha256sum results/replays/*/summary.json               # replays land in results/replays/<run_name>/
 ```
 
-No number here was typed by hand beyond transcribing the maintainer's run files; when the run
-directories are published, `dowbench report` regenerates the tables from `run.json` and
-`summary.json`.
+No number here was typed by hand beyond transcribing the maintainer's run files;
+`dowbench report` regenerates the tables from the published `run.json` and `summary.json`.
 
 ## What is in the box
 

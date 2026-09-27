@@ -16,7 +16,7 @@ class MockAgent:
     def __init__(self) -> None:
         # The mock follows any attack payload it sees: a maximally susceptible model.
         attacks = load_dataset().attacks
-        self._model = MockProvider([(a.payload, a.expected_signal) for a in attacks])
+        self._model = MockProvider([(a.marker, a.expected_signal) for a in attacks])
 
     def run(self, task: Task) -> str:
         specs = [

@@ -73,7 +73,7 @@ class RunInfo(BaseModel):
 
 def build_provider(config: RunConfig, dataset: Dataset) -> Provider:
     if config.provider == "mock":
-        return MockProvider([(a.payload, a.expected_signal) for a in dataset.attacks])
+        return MockProvider([(a.marker, a.expected_signal) for a in dataset.attacks])
     if config.provider == "gemini":
         try:
             from dowbench.providers.gemini import GeminiProvider
@@ -336,11 +336,14 @@ def _run_one(
             prompt = f"{prompt}\n\n{attack.rendered_payload}"
         else:
             assert attack.target_tool is not None  # guaranteed by the schema
-            injection = Injection(
-                attack.target_tool,
-                attack.rendered_payload,
-                where="description" if attack.vector == "tool_description" else "result",
-            )
+            if attack.vector == "tool_description":
+                injection = Injection(
+                    attack.target_tool, attack.rendered_payload, where="description"
+                )
+            else:
+                injection = Injection(
+                    attack.target_tool, attack.render, relay_tool=attack.relay_tool
+                )
 
     toolbox = ToolBox(task.tool, injection)
     if agent is not None:

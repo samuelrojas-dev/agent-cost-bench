@@ -1,7 +1,7 @@
 {
   "run_name": "pilot-mock",
   "dowbench_version": "0.0.1",
-  "git_commit": "292f84a9a2e52cb87f163fad5ab3caba1ae4beea",
+  "git_commit": "e57698f29abd132ec3e79f4d63dbb8e7e3acfb24",
   "provider": "mock",
   "simulated": false,
   "replayed": false,
@@ -34,7 +34,11 @@
     "success_threshold": 5.0,
     "unpriced": false,
     "agent": null,
-    "rate_limit": null
+    "rate_limit": {
+      "rpm": 1,
+      "tpm": 1000,
+      "rpd": 1000
+    }
   },
   "served_model_versions": {
     "mock-1": [

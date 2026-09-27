@@ -133,6 +133,13 @@ class RateLimitedProvider:
     def simulated(self) -> bool:
         return self._inner.simulated
 
+    def begin_episode(self, episode_id: str, attempt: str) -> None:
+        # Forward the per-episode hook so a wrapped recorder or replayer still receives it
+        # (ADR 0015); the runner calls it on the outermost provider only.
+        begin = getattr(self._inner, "begin_episode", None)
+        if begin is not None:
+            begin(episode_id, attempt)
+
     def count_tokens(self, request: Request) -> int | None:
         self._limiter.acquire(0)  # a countTokens call: a request, no billed tokens
         return self._inner.count_tokens(request)

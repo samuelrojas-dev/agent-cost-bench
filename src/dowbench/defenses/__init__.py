@@ -7,11 +7,13 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from dowbench.defenses.base import Abort, Defense
-from dowbench.defenses.limits import LoopDetect, TokenBudget, TurnLimit
+from dowbench.defenses.limits import LoopDetect, ResultCap, TokenBudget, TurnLimit
 
 NO_DEFENSE = "none"
 
-REGISTRY: dict[str, type[Defense]] = {cls.name: cls for cls in (TokenBudget, TurnLimit, LoopDetect)}
+REGISTRY: dict[str, type[Defense]] = {
+    cls.name: cls for cls in (TokenBudget, TurnLimit, LoopDetect, ResultCap)
+}
 
 
 class DefenseSpec(BaseModel):

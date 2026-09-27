@@ -163,7 +163,9 @@ payloads for four families, each crediting where the pattern is described.
 | `context_bloat` | tool result | OWASP Top 10 for LLM Apps 2025, LLM10 |
 | `mcp_chain` | tool description | Beyond Max Tokens, arXiv:2601.10955 |
 
-**Defenses**: `none` (baseline), `token_budget`, `turn_limit`, `loop_detect`.
+**Defenses**: `none` (baseline), `token_budget`, `turn_limit`, `loop_detect` (optionally
+with `max_total_tool_calls`), `result_cap` (per-result size cap,
+[ADR 0017](docs/adr/0017-tool-call-and-result-caps.md)).
 
 **Providers**: Gemini (`google-genai`), Anthropic (`anthropic`), and the mock.
 

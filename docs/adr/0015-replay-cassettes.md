@@ -131,3 +131,23 @@ for a replayed real run.
   through the sanitizer and the secrets test.
 - Cassettes must be regenerated when request construction changes; the digest check
   makes that a loud failure, not a silent wrong replay.
+
+## Amendment (2026-09-27): two bugs in the first implementation
+The first implementation shipped two bugs, both fixed and covered by a regression fixture
+(`tests/fixtures/replay-regression`, config with a `rate_limit` and an orphan attempt):
+
+1. **A replay was still wrapped in the rate limiter.** The rate-limit wrap keyed only on
+   `rate_limit is set` and `not simulated`, so replaying a real run whose config carried a
+   `rate_limit` wrapped the `ReplayProvider` in `RateLimitedProvider`. Replay makes no
+   network call, so this was pure harm: it slept on real wall-clock time while reproducing a
+   recorded run, and — because the runner calls `begin_episode` on the outermost provider
+   only — the hook was swallowed and replay drifted. Fix: skip the wrap when replaying; and,
+   should anything wrap a replay again, `RateLimitedProvider` now forwards `begin_episode` to
+   its inner provider.
+2. **`load_cassette` grouped by `episode_id` alone.** A run dir can hold more than one
+   attempt of an episode: an interrupted attempt leaves its calls in the cassette but writes
+   no episode row (ADR 0007). Grouping by episode spliced the orphan attempt's calls before
+   the completed one, so replay consumed the orphan's first call and then drifted. Fix:
+   match the cassette by `(episode_id, attempt)` and keep only the attempt named in
+   `episodes.jsonl` (the one that completed), discarding orphans. This is why replay reads
+   `episodes.jsonl`, and why a replayable run dir must include it alongside `cassette.jsonl`.

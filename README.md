@@ -183,6 +183,23 @@ replay-verified (hash `12abac6a…166dcad`). Of the ten attacks, **`bloat-verify
 that crosses the 5× threshold with no defense**, at **A = 8.86**. (Amplification `A` is
 episode cost ÷ the benign baseline of the same task; success is `A ≥ 5`.)
 
+Its worst-case budget envelope, from `dowbench estimate` (offline, no key, no spend), priced
+from [`pricing.yaml`](src/dowbench/metering/pricing.yaml) at the safety ceiling and the free-tier
+rate limit ([ADR 0014](docs/adr/0014-provider-rate-limiting.md)):
+
+```
+$ dowbench estimate configs/pilot-gemini-v2.yaml
+episodes: 75 (pending 75)
+worst case: 1,200,000 tokens, $3.0000
+model calls: at most 450, each preceded by one token count
+rate limit: 900 requests (450 generate + 450 countTokens), at least 75.0 min across 2 day(s)
+already spent in this run dir: 0 tokens, $0.0000
+```
+
+That is a *ceiling*, not the billed cost: every episode is priced as if it ran to the safety
+ceiling, so a real run (and its replay) lands well under it. Split across two days because each
+`countTokens` counts against the free-tier requests-per-day limit; resume with `--resume`.
+
 **Focus run** — `bloat-verify-001` against all five defenses, five repeats: 50 episodes
 (`configs/focus-bloat-verify.yaml`), replay-verified (hash `5ac674d8…4d7f7ac`).
 

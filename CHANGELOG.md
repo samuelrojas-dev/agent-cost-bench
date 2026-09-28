@@ -18,6 +18,9 @@ All notable changes to this project are documented here. The format follows
 - Pilot v1 recorded in the README as an antecedent: the earlier 4 attacks × 4 defenses run
   (ASR 0 % in every cell) whose null result motivated the amplifying attacks of ADR 0016
   (#28).
+- `dowbench estimate` output for `configs/pilot-gemini-v2.yaml` added to the README's
+  Results (pilot) section — its worst-case budget envelope (75 episodes, 1.2M tokens / $3.00,
+  900 requests across 2 days), noted as a ceiling, not the billed cost (#31).
 
 ### Changed
 

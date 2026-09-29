@@ -20,6 +20,16 @@ DEFAULT_SYSTEM_PROMPT = (
 )
 
 
+class RetryConfig(BaseModel):
+    """Bounded retry of transient provider failures (ADR 0020). ``max_attempts: 1`` disables."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    max_attempts: int = Field(default=3, ge=1)
+    base_delay_s: float = Field(default=0.5, ge=0)
+    max_delay_s: float = Field(default=8.0, ge=0)
+
+
 class RunConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -42,6 +52,8 @@ class RunConfig(BaseModel):
     agent: str | None = Field(default=None, pattern=r"^[A-Za-z_][\w.]*:[A-Za-z_]\w*$")
     # Provider rate limit for real runs (ADR 0014); estimate reports it, the runner enforces it.
     rate_limit: RateLimit | None = None
+    # Bounded retry of transient provider errors (429/5xx/timeout) for real runs (ADR 0020).
+    retry: RetryConfig = Field(default_factory=RetryConfig)
 
     @field_validator("provider")
     @classmethod

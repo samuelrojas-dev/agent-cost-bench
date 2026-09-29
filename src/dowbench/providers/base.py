@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import re
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -15,6 +18,56 @@ StopReason = Literal["end_turn", "tool_use", "max_tokens", "refusal", "other"]
 
 class ProviderSetupError(RuntimeError):
     """The provider cannot be built: missing optional dependency or credentials."""
+
+
+class TransientProviderError(RuntimeError):
+    """A provider call was rejected for a temporary reason and is worth retrying.
+
+    Rate limits (429) and 5xx responses are *rejected*, not billed, so retrying one adds no
+    spend (ADR 0010, ADR 0020). Adapters raise this after classifying an SDK error; the
+    ``RetryingProvider`` decorator retries it, and an exhausted retry leaves the episode
+    unfinished so ``--resume`` runs it again rather than skipping it (#37).
+    """
+
+
+# HTTP statuses worth retrying: request timeout, conflict, too-early, rate limit, and the
+# 5xx family a provider returns when temporarily unavailable.
+_RETRYABLE_STATUS = frozenset({408, 409, 425, 429, 500, 502, 503, 504})
+_TRANSIENT_NAME = re.compile(r"timeout|timedout|connection|connect|overloaded", re.IGNORECASE)
+
+
+def is_transient_error(exc: BaseException) -> bool:
+    """Whether ``exc`` from a provider SDK is a temporary failure worth retrying.
+
+    SDK-agnostic: an HTTP status in the retryable set (read from ``status_code`` or ``code``,
+    the two attributes the Gemini and Anthropic SDKs use), or a timeout/connection error
+    identified by its exception class name. Anything else is treated as terminal.
+    """
+    if isinstance(exc, TransientProviderError):
+        return True
+    status = getattr(exc, "status_code", None)
+    if status is None:
+        status = getattr(exc, "code", None)
+    if isinstance(status, int) and status in _RETRYABLE_STATUS:
+        return True
+    return bool(_TRANSIENT_NAME.search(type(exc).__name__))
+
+
+@contextmanager
+def transient_boundary() -> Iterator[None]:
+    """Re-raise a transient SDK error inside as ``TransientProviderError``; leave the rest.
+
+    Adapters wrap their SDK call in this so a 429/5xx/timeout becomes the retryable type
+    (ADR 0020) while `UsageMappingError`, `ProviderSetupError` and real bugs pass through.
+    """
+    try:
+        yield
+    except TransientProviderError:
+        raise
+    except Exception as exc:
+        if is_transient_error(exc):
+            raise TransientProviderError(str(exc)) from exc
+        raise
 
 
 class UsageMappingError(ValueError):

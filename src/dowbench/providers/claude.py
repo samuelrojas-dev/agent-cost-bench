@@ -33,6 +33,7 @@ from dowbench.providers.base import (
     StopReason,
     ToolCall,
     UsageMappingError,
+    transient_boundary,
 )
 
 API_URL = "https://api.anthropic.com"
@@ -200,12 +201,14 @@ class AnthropicProvider:
 
     def count_tokens(self, request: Request) -> int:
         """Anthropic's estimate of the input tokens; see ADR 0006 for its accuracy."""
-        return self._client.messages.count_tokens(**_common(request)).input_tokens
+        with transient_boundary():
+            return self._client.messages.count_tokens(**_common(request)).input_tokens
 
     def complete(self, request: Request) -> Response:
         params = {"max_tokens": request.max_tokens, **_common(request)}
         start = time.perf_counter()
-        message = self._client.messages.create(**params)
+        with transient_boundary():
+            message = self._client.messages.create(**params)
         latency = time.perf_counter() - start
 
         raw_usage = message.usage.model_dump(mode="json", exclude_none=True)

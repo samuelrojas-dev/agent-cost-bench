@@ -24,6 +24,7 @@ from dowbench.providers.base import (
     StopReason,
     ToolCall,
     UsageMappingError,
+    transient_boundary,
 )
 
 # Fields of GenerateContentResponseUsageMetadata this adapter understands. A new, non-empty
@@ -208,7 +209,8 @@ class GeminiProvider:
     def count_tokens(self, request: Request) -> int:
         """Exact count of the messages plus an upper bound for system and tools (ADR 0004)."""
         contents = to_contents(request.messages)
-        counted = self._client.models.count_tokens(model=request.model, contents=contents)
+        with transient_boundary():
+            counted = self._client.models.count_tokens(model=request.model, contents=contents)
         tools_json = json.dumps([t.model_dump() for t in request.tools]) if request.tools else ""
         bound = len(request.system.encode()) + len(tools_json.encode()) + TEMPLATE_MARGIN_TOKENS
         return (counted.total_tokens or 0) + bound
@@ -222,9 +224,10 @@ class GeminiProvider:
         )
         contents = to_contents(request.messages)
         start = time.perf_counter()
-        response = self._client.models.generate_content(
-            model=request.model, contents=contents, config=config
-        )
+        with transient_boundary():
+            response = self._client.models.generate_content(
+                model=request.model, contents=contents, config=config
+            )
         latency = time.perf_counter() - start
 
         text: list[str] = []

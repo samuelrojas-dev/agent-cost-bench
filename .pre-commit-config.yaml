@@ -21,7 +21,7 @@ repos:
     hooks:
       - id: mypy
         name: mypy
-        entry: mypy src tests
+        entry: mypy src tests scripts
         # An isolated env with mypy and the project's typing dependencies, so the
         # pydantic.mypy plugin (tool.mypy) and third-party imports resolve without needing
         # the contributor's venv on PATH.

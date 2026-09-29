@@ -235,6 +235,9 @@ sha256sum results/replays/*/summary.json               # replays land in results
 
 No number here was typed by hand beyond transcribing the maintainer's run files;
 `dowbench report` regenerates the tables from the published `run.json` and `summary.json`.
+CI runs this same check on every push — [`scripts/verify_cassettes.py`](scripts/verify_cassettes.py)
+replays each published cassette and fails the build unless its `summary.json` reproduces byte
+for byte *and* still matches the hash shown above, so these numbers cannot silently drift.
 
 ## What is in the box
 

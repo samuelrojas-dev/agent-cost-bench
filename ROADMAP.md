@@ -1,0 +1,31 @@
+# Roadmap
+
+Where dowbench is headed and why. The reasoning, the definition of "1.0", and the ordering
+live in [ADR 0019 — Path to 1.0](docs/adr/0019-path-to-1.0.md); this file tracks status.
+
+Each phase ships as its own PR, with an ADR where the decision is non-obvious. Correctness
+lands before architecture, which lands before scale, rigor, breadth and release.
+
+| Phase | What | ADR | Status |
+|---|---|---|---|
+| 0 | This roadmap + ADR 0019; the two known bugs filed as issues; `scripts/` under mypy | [0019](docs/adr/0019-path-to-1.0.md) | 🚧 in progress |
+| 1 | Correctness: durable spend + resume semantics for the two known bugs, with regression tests | 0020 | ⬜ planned |
+| 2 | Extensible plugins via entry points (providers / defenses / attacks) | 0021 | ⬜ planned |
+| 3 | Concurrency & scale: parallel episodes honouring rate limits | 0022 | ⬜ planned |
+| 4 | Observability & resilience: structured logs, error taxonomy, transient retries | 0023 | ⬜ planned |
+| 5 | Statistical rigor: bootstrap CIs, sample-size guidance, model×defense comparison, `A ≥ 5` sensitivity | 0024 | ⬜ planned |
+| 6 | External validity: OpenAI adapter (offline-tested; real pilot is a separate authorized step) | 0025 | ⬜ planned |
+| 7 | Maturity & release: `ARCHITECTURE.md`, OSS hygiene, semver + PyPI release, coverage gate | — | ⬜ planned |
+
+Ordering note: Phases 0 and 1 land first. Phases 3–5 start only after a per-phase time/cost
+estimate is agreed. Phase 7's text-only parts (SECURITY, CONTRIBUTING, templates) may be
+brought forward when cheap.
+
+## Known bugs (Phase 1)
+
+- **Spend not durable across a kill** — a provider call billed but not yet written to
+  `calls.jsonl` when the process dies is lost from cumulative spend, so `--resume`
+  under-counts and can exceed `--budget-usd`.
+- **Transient failure drops an episode on resume** — an episode that ends `errored`
+  (e.g. a 429 mid-run) is recorded and then skipped by every later `--resume`; transient
+  and terminal errors are not distinguished and nothing retries.

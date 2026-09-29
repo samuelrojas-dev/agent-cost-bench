@@ -9,8 +9,8 @@ lands before architecture, which lands before scale, rigor, breadth and release.
 | Phase | What | ADR | Status |
 |---|---|---|---|
 | 0 | This roadmap + ADR 0019; the two known bugs filed as issues; `scripts/` under mypy | [0019](docs/adr/0019-path-to-1.0.md) | ✅ done |
-| 1 | Correctness: durable spend + resume semantics for the two known bugs, with regression tests | [0020](docs/adr/0020-durability-and-resume.md) | 🚧 in progress |
-| 2 | Extensible plugins via entry points (providers / defenses / attacks) | 0021 | ⬜ planned |
+| 1 | Correctness: durable spend + resume semantics for the two known bugs, with regression tests | [0020](docs/adr/0020-durability-and-resume.md) | ✅ done |
+| 2 | Extensible plugins via entry points (providers / defenses / attacks) | [0021](docs/adr/0021-plugin-entry-points.md) | 🚧 in progress |
 | 3 | Concurrency & scale: parallel episodes honouring rate limits | 0022 | ⬜ planned |
 | 4 | Observability & resilience: structured logs, error taxonomy, transient retries | 0023 | ⬜ planned |
 | 5 | Statistical rigor: bootstrap CIs, sample-size guidance, model×defense comparison, `A ≥ 5` sensitivity | 0024 | ⬜ planned |

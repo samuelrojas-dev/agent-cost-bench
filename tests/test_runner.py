@@ -57,7 +57,7 @@ def test_config_requires_exactly_one_baseline() -> None:
 
 
 def test_config_rejects_unavailable_provider() -> None:
-    with pytest.raises(ValidationError, match="not available yet"):
+    with pytest.raises(ValidationError, match="not registered"):
         _config(provider="nope")
 
 

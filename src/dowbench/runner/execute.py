@@ -17,8 +17,9 @@ from dowbench.attacks.schema import Dataset
 from dowbench.defenses import build_defenses
 from dowbench.metering.pricing import ModelPrice, PriceTable
 from dowbench.metrics import RunSummary, summarize
-from dowbench.providers.base import Provider, ProviderSetupError
+from dowbench.providers.base import Provider, ProviderSetupError, TransientProviderError
 from dowbench.providers.mock import MockProvider
+from dowbench.providers.retry import RetryingProvider, RetryPolicy
 from dowbench.runner.budget import check_budget, spent
 from dowbench.runner.config import RunConfig
 from dowbench.runner.lock import RunLock
@@ -40,6 +41,10 @@ class RunExistsError(RuntimeError):
 
 class EpisodeErroredError(RuntimeError):
     """A billed call could not be priced; the run stops after recording it (ADR 0007)."""
+
+
+class RunInterruptedError(RuntimeError):
+    """A transient provider failure stopped the run; --resume re-runs the episode (ADR 0020)."""
 
 
 class Estimate(BaseModel):
@@ -232,6 +237,18 @@ def _execute_locked(
     ):
         limiter = RateLimiter(config.rate_limit)
         provider = RateLimitedProvider(provider, limiter)
+    # Retry transient failures (429/5xx/timeout) with bounded backoff, inside recording so
+    # only the successful response is recorded and outside the limiter so each try is metered
+    # (ADR 0020). max_attempts: 1 makes this a no-op except for surfacing TransientProviderError.
+    if provider is not None and not replaying:
+        provider = RetryingProvider(
+            provider,
+            RetryPolicy(
+                max_attempts=config.retry.max_attempts,
+                base_delay_s=config.retry.base_delay_s,
+                max_delay_s=config.retry.max_delay_s,
+            ),
+        )
     # Every run records a cassette so it can be replayed offline later; a replayed run keeps
     # the source's simulated flag, so a mock cassette stays SIMULATED and is never taken for a
     # real result (ADR 0015).
@@ -300,9 +317,23 @@ def _run_pending(
         if begin is not None:
             begin(spec.id, attempt)
         context = {"episode_id": spec.id, "model": spec.model, "attempt": attempt}
-        record = _run_one(
-            config, dataset, spec, provider, agent, functools.partial(store.append_call, context)
-        )
+        try:
+            record = _run_one(
+                config,
+                dataset,
+                spec,
+                provider,
+                agent,
+                functools.partial(store.append_call, context),
+            )
+        except TransientProviderError as exc:
+            # No episode row is written, so this episode stays out of the resume "done" set and
+            # --resume runs it again once the transient condition clears (ADR 0020, #37). Calls
+            # already billed in this attempt are in calls.jsonl and still counted toward spend.
+            raise RunInterruptedError(
+                f"episode {spec.id} hit a transient provider error: {exc}. "
+                "Nothing was recorded for it; resume re-runs it."
+            ) from exc
         record = record.model_copy(
             update={
                 "cost_usd": (price_of[spec.model].cost_usd(record.usage) if price_of else None),

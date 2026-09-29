@@ -11,7 +11,7 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 
-from dowbench.attacks.schema import Signal
+from dowbench.attacks.schema import Dataset, Signal
 from dowbench.metering.usage import Usage
 from dowbench.providers.base import Request, Response, StopReason, ToolCall, ToolSpec
 
@@ -19,6 +19,11 @@ from dowbench.providers.base import Request, Response, StopReason, ToolCall, Too
 def approx_tokens(text: str) -> int:
     """Four characters per token: crude, but deterministic."""
     return math.ceil(len(text) / 4)
+
+
+def build_mock(config: object, dataset: Dataset) -> MockProvider:
+    """``dowbench.providers`` factory: the mock, primed with the dataset triggers (ADR 0021)."""
+    return MockProvider([(a.marker, a.expected_signal) for a in dataset.attacks])
 
 
 class MockProvider:

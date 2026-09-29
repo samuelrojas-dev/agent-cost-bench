@@ -11,7 +11,7 @@ import typer
 from pydantic import ValidationError
 
 from dowbench.attacks.schema import load_dataset
-from dowbench.defenses import NO_DEFENSE, REGISTRY
+from dowbench.defenses import NO_DEFENSE, defense_registry
 from dowbench.metering.pricing import PriceTable, PricingError
 from dowbench.metrics import RunSummary
 from dowbench.providers.base import ProviderSetupError
@@ -125,7 +125,7 @@ def list_items(what: Annotated[Listable, typer.Argument(help="What to list")]) -
             typer.echo(f"{task.id:<20} {task.tool:<10} {task.prompt}")
     else:
         typer.echo(f"{NO_DEFENSE:<14} baseline: no defense, safety ceiling only")
-        for name, cls in REGISTRY.items():
+        for name, cls in sorted(defense_registry().items()):
             doc = (cls.__doc__ or "").strip().splitlines()[0]
             typer.echo(f"{name:<14} {doc}")
 

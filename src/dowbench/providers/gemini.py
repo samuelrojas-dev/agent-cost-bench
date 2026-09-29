@@ -274,3 +274,20 @@ class GeminiProvider:
                 "config": config.model_dump(mode="json", exclude_none=True),
             },
         )
+
+
+def build_gemini(config: object, dataset: object) -> GeminiProvider:
+    """``dowbench.providers`` factory for the Gemini adapter (ADR 0021)."""
+    return GeminiProvider()
+
+
+def map_sut_response(response: object) -> tuple[Usage, dict[str, Any], str | None] | None:
+    """``dowbench.sut_mappers`` entry: meter a Gemini SDK response for an agent run (ADR 0021)."""
+    if isinstance(response, types.GenerateContentResponse):
+        metadata = response.usage_metadata
+        raw = metadata.model_dump(mode="json", exclude_none=True) if metadata else {}
+        try:
+            return map_usage(metadata), raw, response.model_version
+        except UsageMappingError as exc:
+            raise UsageMappingError(str(exc), raw) from exc
+    return None

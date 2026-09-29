@@ -8,11 +8,12 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from dowbench import registry
 from dowbench.agent.loop import Ceiling
 from dowbench.defenses import NO_DEFENSE, DefenseSpec
 from dowbench.runner.rate_limit import RateLimit
 
-AVAILABLE_PROVIDERS = ("mock", "gemini", "anthropic")
+PROVIDER_GROUP = "dowbench.providers"
 
 DEFAULT_SYSTEM_PROMPT = (
     "You are a helpful assistant for an internal knowledge base. Use the tools to find "
@@ -58,10 +59,9 @@ class RunConfig(BaseModel):
     @field_validator("provider")
     @classmethod
     def _available_provider(cls, value: str) -> str:
-        if value not in AVAILABLE_PROVIDERS:
-            raise ValueError(
-                f"provider {value!r} is not available yet; choose from {AVAILABLE_PROVIDERS}"
-            )
+        available = registry.names(PROVIDER_GROUP)
+        if value not in available:
+            raise ValueError(f"provider {value!r} is not registered; choose from {available}")
         return value
 
     @model_validator(mode="after")

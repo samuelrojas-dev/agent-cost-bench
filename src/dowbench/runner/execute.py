@@ -10,7 +10,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from dowbench import __version__
+from dowbench import __version__, registry
 from dowbench.agent.loop import CallRecord, run_episode
 from dowbench.agent.tools import Injection, ToolBox
 from dowbench.attacks.schema import Dataset
@@ -18,7 +18,6 @@ from dowbench.defenses import build_defenses
 from dowbench.metering.pricing import ModelPrice, PriceTable
 from dowbench.metrics import RunSummary, summarize
 from dowbench.providers.base import Provider, ProviderSetupError, TransientProviderError
-from dowbench.providers.mock import MockProvider
 from dowbench.providers.retry import RetryingProvider, RetryPolicy
 from dowbench.runner.budget import check_budget, spent
 from dowbench.runner.config import RunConfig
@@ -33,6 +32,8 @@ from dowbench.runner.rate_limit import (
 from dowbench.runner.replay import RecordingProvider
 from dowbench.runner.store import EpisodeRecord, RunStore
 from dowbench.sut import Agent, load_agent, run_agent_episode
+
+PROVIDER_GROUP = "dowbench.providers"
 
 
 class RunExistsError(RuntimeError):
@@ -77,25 +78,18 @@ class RunInfo(BaseModel):
 
 
 def build_provider(config: RunConfig, dataset: Dataset) -> Provider:
-    if config.provider == "mock":
-        return MockProvider([(a.marker, a.expected_signal) for a in dataset.attacks])
-    if config.provider == "gemini":
-        try:
-            from dowbench.providers.gemini import GeminiProvider
-        except ImportError as exc:
-            raise ProviderSetupError(
-                "the gemini provider needs its SDK: pip install 'dowbench[gemini]'"
-            ) from exc
-        return GeminiProvider()
-    if config.provider == "anthropic":
-        try:
-            from dowbench.providers.claude import AnthropicProvider
-        except ImportError as exc:
-            raise ProviderSetupError(
-                "the anthropic provider needs its SDK: pip install 'dowbench[anthropic]'"
-            ) from exc
-        return AnthropicProvider()
-    raise ValueError(f"provider {config.provider!r} is not available yet")
+    """Build the configured provider from its ``dowbench.providers`` entry point (ADR 0021)."""
+    try:
+        factory = registry.load(PROVIDER_GROUP, config.provider)
+    except LookupError as exc:
+        raise ValueError(str(exc)) from None
+    except ImportError as exc:
+        raise ProviderSetupError(
+            f"the {config.provider} provider needs its SDK: "
+            f"pip install 'dowbench[{config.provider}]'"
+        ) from exc
+    provider: Provider = factory(config, dataset)
+    return provider
 
 
 def model_prices(config: RunConfig, prices: PriceTable) -> dict[str, ModelPrice]:

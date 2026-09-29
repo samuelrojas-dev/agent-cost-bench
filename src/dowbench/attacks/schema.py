@@ -8,6 +8,7 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from dowbench import registry
 from dowbench.agent.tools import TOOL_NAMES
 
 DATA_DIR = Path(__file__).with_name("data")
@@ -142,12 +143,26 @@ class Dataset(BaseModel):
         return next(a for a in self.attacks if a.id == attack_id)
 
 
-def load_dataset(data_dir: Path = DATA_DIR) -> Dataset:
-    """Merge every ``*.yaml`` file in ``data_dir`` into one validated dataset."""
+ATTACK_GROUP = "dowbench.attacks"
+
+
+def load_dataset(data_dir: Path = DATA_DIR, *, include_plugins: bool = True) -> Dataset:
+    """Merge every ``*.yaml`` in ``data_dir`` and every installed attack pack into a dataset.
+
+    A ``dowbench.attacks`` entry point resolves to a callable returning a mapping with
+    optional ``benign`` and ``attacks`` lists, so a third party ships attacks (and any benign
+    tasks they need) from its own package (ADR 0021). ``include_plugins=False`` loads only the
+    local files, for tests that need the built-in dataset in isolation.
+    """
     benign: list[object] = []
     attacks: list[object] = []
     for path in sorted(data_dir.glob("*.yaml")):
         content = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         benign += content.get("benign", [])
         attacks += content.get("attacks", [])
+    if include_plugins:
+        for provide in registry.load_all(ATTACK_GROUP).values():
+            pack = provide() or {}
+            benign += pack.get("benign", [])
+            attacks += pack.get("attacks", [])
     return Dataset.model_validate({"benign": benign, "attacks": attacks})

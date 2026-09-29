@@ -1,0 +1,19 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "dowbench-plugin-example"
+version = "0.0.1"
+description = "Example dowbench plugin: a custom defense and provider via entry points (ADR 0021)"
+requires-python = ">=3.11"
+dependencies = ["dowbench"]
+
+[project.entry-points."dowbench.defenses"]
+head_cap = "dowbench_plugin_example.defense:HeadCap"
+
+[project.entry-points."dowbench.providers"]
+echo = "dowbench_plugin_example.provider:build_echo"
+
+[tool.hatch.build.targets.wheel]
+packages = ["dowbench_plugin_example"]

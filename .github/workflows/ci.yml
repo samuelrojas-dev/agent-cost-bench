@@ -49,6 +49,26 @@ jobs:
           name: coverage-xml
           path: coverage.xml
 
+  replay-verify:
+    name: replay-verify (published cassettes)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Offline: replays the committed cassettes and checks each summary.json reproduces
+    # byte for byte and matches the hash the README publishes. No key, no network, no spend
+    # — but the provider SDKs are installed, since rebuilding a recorded response from the
+    # cassette needs the provider's own types (e.g. google-genai for a Gemini run; ADR 0015).
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install
+        run: python -m pip install -e ".[gemini,anthropic]"
+      - name: Verify published cassettes replay to their committed, README-published hashes
+        run: python scripts/verify_cassettes.py
+
   gitleaks:
     runs-on: ubuntu-latest
     timeout-minutes: 10

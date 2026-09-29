@@ -48,6 +48,27 @@ dev = [
 [project.scripts]
 dowbench = "dowbench.cli:app"
 
+# Built-in components are registered as plugins too (ADR 0021): a third party adds a
+# provider, defense or attack pack from its own package by declaring the same entry points.
+[project.entry-points."dowbench.providers"]
+mock = "dowbench.providers.mock:build_mock"
+gemini = "dowbench.providers.gemini:build_gemini"
+anthropic = "dowbench.providers.claude:build_anthropic"
+
+[project.entry-points."dowbench.defenses"]
+token_budget = "dowbench.defenses.limits:TokenBudget"
+turn_limit = "dowbench.defenses.limits:TurnLimit"
+loop_detect = "dowbench.defenses.limits:LoopDetect"
+result_cap = "dowbench.defenses.limits:ResultCap"
+
+[project.entry-points."dowbench.codecs"]
+gemini = "dowbench.providers.provider_data:GeminiCodec"
+
+[project.entry-points."dowbench.sut_mappers"]
+mock = "dowbench.sut:map_mock_response"
+gemini = "dowbench.providers.gemini:map_sut_response"
+anthropic = "dowbench.providers.claude:map_sut_response"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/dowbench"]
 

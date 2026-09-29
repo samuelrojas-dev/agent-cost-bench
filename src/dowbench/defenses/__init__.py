@@ -2,18 +2,22 @@
 
 from __future__ import annotations
 
-from typing import Any
+from functools import cache
+from typing import Any, cast
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from dowbench.defenses.base import Abort, Defense
-from dowbench.defenses.limits import LoopDetect, ResultCap, TokenBudget, TurnLimit
+from dowbench.registry import load_all
 
 NO_DEFENSE = "none"
+DEFENSE_GROUP = "dowbench.defenses"
 
-REGISTRY: dict[str, type[Defense]] = {
-    cls.name: cls for cls in (TokenBudget, TurnLimit, LoopDetect, ResultCap)
-}
+
+@cache
+def defense_registry() -> dict[str, type[Defense]]:
+    """The installed defenses, name -> class, from the ``dowbench.defenses`` entry points."""
+    return {name: cast(type[Defense], obj) for name, obj in load_all(DEFENSE_GROUP).items()}
 
 
 class DefenseSpec(BaseModel):
@@ -38,10 +42,11 @@ def build_defenses(spec: DefenseSpec) -> list[Defense]:
         if spec.params:
             raise ValueError("defense 'none' takes no params")
         return []
+    registry = defense_registry()
     try:
-        cls = REGISTRY[spec.name]
+        cls = registry[spec.name]
     except KeyError:
-        known = ", ".join(sorted([NO_DEFENSE, *REGISTRY]))
+        known = ", ".join(sorted([NO_DEFENSE, *registry]))
         raise ValueError(f"unknown defense {spec.name!r}; known: {known}") from None
     try:
         return [cls(**spec.params)]
@@ -49,4 +54,11 @@ def build_defenses(spec: DefenseSpec) -> list[Defense]:
         raise ValueError(f"defense {spec.name!r}: {exc}") from None
 
 
-__all__ = ["NO_DEFENSE", "REGISTRY", "Abort", "Defense", "DefenseSpec", "build_defenses"]
+__all__ = [
+    "NO_DEFENSE",
+    "Abort",
+    "Defense",
+    "DefenseSpec",
+    "build_defenses",
+    "defense_registry",
+]

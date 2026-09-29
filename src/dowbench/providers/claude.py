@@ -239,3 +239,19 @@ class AnthropicProvider:
             model_version=message.model,
             request_body=_jsonable(params),
         )
+
+
+def build_anthropic(config: object, dataset: object) -> AnthropicProvider:
+    """``dowbench.providers`` factory for the Anthropic adapter (ADR 0021)."""
+    return AnthropicProvider()
+
+
+def map_sut_response(response: object) -> tuple[Usage, dict[str, Any], str | None] | None:
+    """``dowbench.sut_mappers`` entry: meter an Anthropic SDK message for an agent run."""
+    if isinstance(response, ApiMessage):
+        raw = response.usage.model_dump(mode="json", exclude_none=True)
+        try:
+            return map_usage(response.usage), raw, response.model
+        except UsageMappingError as exc:
+            raise UsageMappingError(str(exc), raw) from exc
+    return None

@@ -20,6 +20,19 @@ from dowbench.agent.loop import CallRecord, Ceiling, EpisodeResult
 from dowbench.agent.tools import ToolBox
 from dowbench.metering.usage import Usage
 from dowbench.providers.base import Response, ToolCall, UsageMappingError
+from dowbench.registry import load
+
+SUT_MAPPER_GROUP = "dowbench.sut_mappers"
+# A mapper turns an SDK response object into billed usage, or None if it does not recognize
+# the type. Providers register one under ``dowbench.sut_mappers`` (ADR 0021).
+SutMapper = Callable[[object], "tuple[Usage, dict[str, Any], str | None] | None"]
+
+
+def map_mock_response(response: object) -> tuple[Usage, dict[str, Any], str | None] | None:
+    """Map the mock provider's own ``Response`` for an agent-run meter (ADR 0021)."""
+    if isinstance(response, Response):
+        return response.usage, response.raw.get("usage", {}), response.model_version
+    return None
 
 
 class StopEpisode(BaseException):
@@ -112,34 +125,19 @@ class Meter:
             self._on_call(call)
 
     def _map(self, response: object) -> tuple[Usage, dict[str, Any], str | None]:
-        if self._provider == "mock" and isinstance(response, Response):
-            return response.usage, response.raw.get("usage", {}), response.model_version
-        if self._provider == "gemini":
-            from google.genai import types
-
-            from dowbench.providers import gemini
-
-            if isinstance(response, types.GenerateContentResponse):
-                metadata = response.usage_metadata
-                raw = metadata.model_dump(mode="json", exclude_none=True) if metadata else {}
-                try:
-                    return gemini.map_usage(metadata), raw, response.model_version
-                except UsageMappingError as exc:
-                    raise UsageMappingError(str(exc), raw) from exc
-        if self._provider == "anthropic":
-            from anthropic.types import Message
-
-            from dowbench.providers import claude
-
-            if isinstance(response, Message):
-                raw = response.usage.model_dump(mode="json", exclude_none=True)
-                try:
-                    return claude.map_usage(response.usage), raw, response.model
-                except UsageMappingError as exc:
-                    raise UsageMappingError(str(exc), raw) from exc
+        # Each provider registers how to meter its SDK response (ADR 0021); the mapper does
+        # its own isinstance check and returns None if the object is not its type.
+        try:
+            mapper: SutMapper = load(SUT_MAPPER_GROUP, self._provider)
+        except LookupError:
+            mapper = None  # type: ignore[assignment]
+        if mapper is not None:
+            mapped = mapper(response)
+            if mapped is not None:
+                return mapped
         raise UsageMappingError(
             f"cannot meter a {type(response).__name__} for provider {self._provider!r}; pass "
-            "the SDK's response object (GenerateContentResponse or anthropic Message)"
+            "the SDK's own response object"
         )
 
 

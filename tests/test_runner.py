@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +15,7 @@ from dowbench.runner.config import RunConfig
 from dowbench.runner.execute import (
     EpisodeErroredError,
     RunExistsError,
+    RunInterruptedError,
     build_provider,
     estimate,
     execute,
@@ -207,8 +209,71 @@ class _FailingProvider(MockProvider):
         return response.model_copy(update={"raw": {"usage": response.usage.model_dump()}})
 
 
+class _PersistentFailProvider(MockProvider):
+    """Fails every call from ``fail_from`` on, so retries cannot recover (ADR 0020, #37)."""
+
+    simulated = False
+
+    def __init__(self, fail_from: int, error: Exception) -> None:
+        super().__init__()
+        self.calls = 0
+        self._fail_from = fail_from
+        self._error = error
+
+    def complete(self, request: Request) -> Response:
+        self.calls += 1
+        if self.calls >= self._fail_from:
+            raise self._error
+        response = super().complete(request)
+        return response.model_copy(update={"raw": {"usage": response.usage.model_dump()}})
+
+
 def _rows(path: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
+
+
+def test_calls_are_fsynced_so_spend_survives_a_crash(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # #36: every append fsyncs, so a record that append_call returned from is durable.
+    synced: list[int] = []
+    real_fsync = os.fsync
+
+    def spy(fd: int) -> None:
+        synced.append(fd)
+        real_fsync(fd)
+
+    monkeypatch.setattr(os, "fsync", spy)
+    config, dataset = _config(), load_dataset()
+    execute(config, dataset, provider=MockProvider(), prices=PriceTable.load(), out_dir=tmp_path)
+    assert synced  # calls.jsonl, episodes.jsonl and run.json were flushed to stable storage
+
+
+def test_retry_recovers_from_a_transient_blip(tmp_path: Path) -> None:
+    # #37: a single transient failure is retried and the run finishes without interruption.
+    config, dataset = _config(retry={"max_attempts": 3, "base_delay_s": 0}), load_dataset()
+    provider = _FailingProvider(fail_on=2, error=TimeoutError("read timed out"))
+    execute(config, dataset, provider=provider, prices=PriceTable.load(), out_dir=tmp_path)
+    episodes = _rows(tmp_path / config.run_name / "episodes.jsonl")
+    assert len(episodes) == len(plan_episodes(config, dataset))
+    assert all(e["status"] == "completed" for e in episodes)
+
+
+def test_transient_exhaustion_interrupts_and_resume_completes(tmp_path: Path) -> None:
+    # #37: when retries cannot recover, no episode is recorded (so it is not skipped), and a
+    # later resume with a healthy provider completes the whole matrix.
+    config, dataset = _config(retry={"max_attempts": 2, "base_delay_s": 0}), load_dataset()
+    provider = _PersistentFailProvider(fail_from=2, error=TimeoutError("read timed out"))
+    with pytest.raises(RunInterruptedError):
+        execute(config, dataset, provider=provider, prices=PriceTable.load(), out_dir=tmp_path)
+    run_dir = tmp_path / config.run_name
+    assert _rows(run_dir / "episodes.jsonl") == []  # nothing marked done, so nothing skipped
+
+    resumed = _FailingProvider(fail_on=0, error=TimeoutError())
+    execute(config, dataset, provider=resumed, prices=PriceTable.load(), out_dir=tmp_path)
+    episodes = _rows(run_dir / "episodes.jsonl")
+    assert len(episodes) == len(plan_episodes(config, dataset))
+    assert all(e["status"] == "completed" for e in episodes)
 
 
 def test_unpriceable_call_is_recorded_stops_the_run_and_is_not_retried(tmp_path: Path) -> None:
@@ -233,9 +298,10 @@ def test_unpriceable_call_is_recorded_stops_the_run_and_is_not_retried(tmp_path:
 
 
 def test_interrupted_episode_keeps_its_billed_calls(tmp_path: Path) -> None:
-    config, dataset = _config(), load_dataset()
+    # retry off: a transient failure surfaces at once as RunInterruptedError (ADR 0020).
+    config, dataset = _config(retry={"max_attempts": 1}), load_dataset()
     provider = _FailingProvider(fail_on=2, error=TimeoutError("read timed out"))
-    with pytest.raises(TimeoutError):
+    with pytest.raises(RunInterruptedError):
         execute(config, dataset, provider=provider, prices=PriceTable.load(), out_dir=tmp_path)
     run_dir = tmp_path / config.run_name
     calls = _rows(run_dir / "calls.jsonl")
@@ -266,16 +332,16 @@ def test_calls_record_model_version_and_requests_are_kept_sanitized(tmp_path: Pa
 
 
 def test_run_json_names_served_versions_even_when_the_run_stops(tmp_path: Path) -> None:
-    config, dataset = _config(), load_dataset()
+    config, dataset = _config(retry={"max_attempts": 1}), load_dataset()
     provider = _FailingProvider(fail_on=2, error=TimeoutError("read timed out"))
-    with pytest.raises(TimeoutError):
+    with pytest.raises(RunInterruptedError):
         execute(config, dataset, provider=provider, prices=PriceTable.load(), out_dir=tmp_path)
     info = json.loads((tmp_path / config.run_name / "run.json").read_text())
     assert info["served_model_versions"] == {"mock-1": ["mock-1-simulated"]}
 
 
 def test_budget_counts_what_earlier_attempts_already_spent(tmp_path: Path) -> None:
-    config, dataset = _config(), load_dataset()
+    config, dataset = _config(retry={"max_attempts": 1}), load_dataset()
     prices = PriceTable.load()
     specs = plan_episodes(config, dataset)
     full_worst = estimate(config, specs, prices, done=set()).worst_case_usd
@@ -283,7 +349,7 @@ def test_budget_counts_what_earlier_attempts_already_spent(tmp_path: Path) -> No
 
     # First attempt: billed calls, then an interruption.
     provider = _FailingProvider(fail_on=4, error=TimeoutError("read timed out"))
-    with pytest.raises(TimeoutError):
+    with pytest.raises(RunInterruptedError):
         execute(
             config,
             dataset,

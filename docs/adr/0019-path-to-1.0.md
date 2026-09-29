@@ -25,7 +25,8 @@ work. For **this** project the gap to "1.0" is not more attacks or features; it 
   a real release, and the open-source hygiene contributors expect.
 
 Two correctness bugs are known and, until now, untracked (filed as issues alongside this
-ADR):
+ADR: [#36](https://github.com/samuelrojas-dev/agent-cost-bench/issues/36) and
+[#37](https://github.com/samuelrojas-dev/agent-cost-bench/issues/37)):
 
 1. **Spend is not durable across a kill.** `budget.spent()` sums `calls.jsonl`, which is
    appended per call, but there is no `fsync` and a window exists between a provider

@@ -23,9 +23,11 @@ brought forward when cheap.
 
 ## Known bugs (Phase 1)
 
-- **Spend not durable across a kill** — a provider call billed but not yet written to
-  `calls.jsonl` when the process dies is lost from cumulative spend, so `--resume`
-  under-counts and can exceed `--budget-usd`.
-- **Transient failure drops an episode on resume** — an episode that ends `errored`
-  (e.g. a 429 mid-run) is recorded and then skipped by every later `--resume`; transient
-  and terminal errors are not distinguished and nothing retries.
+- [#36](https://github.com/samuelrojas-dev/agent-cost-bench/issues/36) **Spend not durable
+  across a kill** — a provider call billed but not yet written to `calls.jsonl` when the
+  process dies is lost from cumulative spend, so `--resume` under-counts and can exceed
+  `--budget-usd`.
+- [#37](https://github.com/samuelrojas-dev/agent-cost-bench/issues/37) **Transient failure
+  drops an episode on resume** — an episode that ends `errored` (e.g. a 429 mid-run) is
+  recorded and then skipped by every later `--resume`; transient and terminal errors are not
+  distinguished and nothing retries.

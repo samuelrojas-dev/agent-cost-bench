@@ -7,6 +7,7 @@ whose ``attempt`` has no episode row belong to an interrupted attempt (ADR 0007)
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any, Literal
@@ -35,6 +36,27 @@ _SECRET_KEYS = frozenset(
 )
 _SECRET_VALUE = re.compile(r"AIza[0-9A-Za-z_-]{20,}|AQ\.[0-9A-Za-z_-]{10,}|sk-ant-[0-9A-Za-z_-]+")
 REDACTED = "[REDACTED]"
+
+
+def _append_line(path: Path, line: str) -> None:
+    """Append one line and fsync it, so a record survives a crash (ADR 0020, #36).
+
+    newline="\n" keeps a run's files byte-for-byte identical on every OS, which replay
+    reproduction (ADR 0015) and any result hash rely on; the default would write CRLF on
+    Windows.
+    """
+    with path.open("a", encoding="utf-8", newline="\n") as fh:
+        fh.write(line)
+        fh.flush()
+        os.fsync(fh.fileno())
+
+
+def _write_text(path: Path, text: str) -> None:
+    """Write a whole file and fsync it (ADR 0020)."""
+    with path.open("w", encoding="utf-8", newline="\n") as fh:
+        fh.write(text)
+        fh.flush()
+        os.fsync(fh.fileno())
 
 
 def sanitize(value: Any) -> Any:
@@ -82,21 +104,18 @@ class RunStore:
 
     def append_call(self, context: dict[str, str], call: CallRecord) -> None:
         self.run_dir.mkdir(parents=True, exist_ok=True)
-        # newline="\n" so a run's files are byte-for-byte identical on every OS, which the
-        # replay reproduction (ADR 0015) and any result hash rely on; the default would write
-        # CRLF on Windows.
-        with self.calls_path.open("a", encoding="utf-8", newline="\n") as fh:
-            fh.write(json.dumps({**context, **call.model_dump(mode="json")}, sort_keys=True) + "\n")
+        _append_line(
+            self.calls_path,
+            json.dumps({**context, **call.model_dump(mode="json")}, sort_keys=True) + "\n",
+        )
         if call.request_body:
             row = {**context, "turn": call.turn, "request": sanitize(call.request_body)}
-            with self.requests_path.open("a", encoding="utf-8", newline="\n") as fh:
-                fh.write(json.dumps(row, sort_keys=True) + "\n")
+            _append_line(self.requests_path, json.dumps(row, sort_keys=True) + "\n")
 
     def append_cassette(self, row: dict[str, Any]) -> None:
         """Append one recorded call to cassette.jsonl, sanitized (ADR 0009, ADR 0015)."""
         self.run_dir.mkdir(parents=True, exist_ok=True)
-        with self.cassette_path.open("a", encoding="utf-8", newline="\n") as fh:
-            fh.write(json.dumps(sanitize(row), sort_keys=True) + "\n")
+        _append_line(self.cassette_path, json.dumps(sanitize(row), sort_keys=True) + "\n")
 
     def load_cassette(self) -> list[dict[str, Any]]:
         if not self.cassette_path.exists():
@@ -117,9 +136,8 @@ class RunStore:
 
     def append_episode(self, episode: EpisodeRecord) -> None:
         self.run_dir.mkdir(parents=True, exist_ok=True)
-        with self.episodes_path.open("a", encoding="utf-8", newline="\n") as fh:
-            fh.write(episode.model_dump_json() + "\n")
+        _append_line(self.episodes_path, episode.model_dump_json() + "\n")
 
     def write_json(self, path: Path, model: BaseModel) -> None:
         self.run_dir.mkdir(parents=True, exist_ok=True)
-        path.write_text(model.model_dump_json(indent=2) + "\n", encoding="utf-8", newline="\n")
+        _write_text(path, model.model_dump_json(indent=2) + "\n")

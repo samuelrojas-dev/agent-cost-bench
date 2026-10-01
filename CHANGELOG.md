@@ -8,6 +8,14 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **`dowbench scan`** — an offline, key-free static tool-risk scan that reads tool definitions
+  and flags the cost-amplification shapes the pilot measured (`unbounded-result`,
+  `unbounded-pagination`, `result-relay`, `no-call-budget`), each tied to an attack family and
+  its fix. Findings are pattern matches, not cost predictions. Built on a neutral `ToolSpec`
+  with a built-in OpenAI function-calling loader; loaders are `dowbench.tool_loaders` plugins.
+  Phase S-A, [ADR 0022](docs/adr/0022-static-tool-risk-scan.md) (#43).
+- `examples/agent_tools.json` — a small OpenAI-format toolset used by the README's
+  60-second scan demo.
 - **Results (pilot)** section in the README, reporting the first real findings from the
   maintainer's local `gemini-3.5-flash-lite` runs (pilot v2 — 10 attacks × 5 defenses; and a
   focus run of `bloat-verify-001` × 5 defenses, 5 repeats). Numbers are attributed to those
@@ -24,6 +32,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- README rewritten around `dowbench scan` as the front door: a new hero and a 60-second scan
+  demo lead, "Run the full benchmark" follows, and the former "Results (pilot)" section is
+  reframed as "The evidence behind the scan" — the measured findings that justify the scan's
+  heuristics. No pilot number changed. Phase S-B, [ADR 0022](docs/adr/0022-static-tool-risk-scan.md).
 - README replay commands now point at the published `results/cassettes/` directories instead
   of only showing a hash to verify against (#27).
 - Consolidated the two overlapping README result sections: "Replaying a real run" is now a

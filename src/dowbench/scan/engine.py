@@ -17,7 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from dowbench.providers.base import ToolSpec
 
 Severity = Literal["high", "medium", "low"]
-_ORDER: dict[Severity, int] = {"high": 3, "medium": 2, "low": 1}
+SEVERITY_RANK: dict[Severity, int] = {"high": 3, "medium": 2, "low": 1}
 
 # A tool whose name/description reads like it returns external data: the shape behind
 # context_bloat. Deliberately curated — generic verbs like "get" are left out to avoid
@@ -133,13 +133,18 @@ class ScanReport(BaseModel):
     def max_severity(self) -> Severity | None:
         if not self.findings:
             return None
-        return max((f.severity for f in self.findings), key=lambda s: _ORDER[s])
+        return max((f.severity for f in self.findings), key=lambda s: SEVERITY_RANK[s])
 
     def counts(self) -> dict[Severity, int]:
         out: dict[Severity, int] = {"high": 0, "medium": 0, "low": 0}
         for f in self.findings:
             out[f.severity] += 1
         return out
+
+    def has_at_least(self, severity: Severity) -> bool:
+        """Whether any finding is at or above ``severity`` — the gate behind ``scan --fail-on``."""
+        threshold = SEVERITY_RANK[severity]
+        return any(SEVERITY_RANK[f.severity] >= threshold for f in self.findings)
 
 
 def _unbounded_result(tool: ToolSpec) -> Finding | None:
@@ -241,5 +246,5 @@ def scan_tools(tools: list[ToolSpec]) -> ScanReport:
     run_level = _no_call_budget(tools)
     if run_level is not None:
         findings.append(run_level)
-    findings.sort(key=lambda f: _ORDER[f.severity], reverse=True)
+    findings.sort(key=lambda f: SEVERITY_RANK[f.severity], reverse=True)
     return ScanReport(tool_count=len(tools), findings=findings)

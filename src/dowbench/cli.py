@@ -34,6 +34,7 @@ from dowbench.runner.rate_limit import RateLimitReached
 from dowbench.runner.replay import CassetteDriftError, replay_run
 from dowbench.runner.store import RunStore
 from dowbench.scan import ToolLoadError, load_tools, render, scan_tools
+from dowbench.scan.engine import Severity
 from dowbench.sut import load_agent
 
 app = typer.Typer(no_args_is_help=True, help="Denial-of-wallet benchmark for LLM agents.")
@@ -56,6 +57,21 @@ class Listable(StrEnum):
 class ScanFormat(StrEnum):
     markdown = "markdown"
     plain = "plain"
+
+
+class ScanFailOn(StrEnum):
+    none = "none"
+    low = "low"
+    medium = "medium"
+    high = "high"
+
+
+# Maps the gate option (minus ``none``) to the engine's severity literal.
+_FAIL_RANK: dict[ScanFailOn, Severity] = {
+    ScanFailOn.low: "low",
+    ScanFailOn.medium: "medium",
+    ScanFailOn.high: "high",
+}
 
 
 def _load_config(path: Path, provider: str | None) -> RunConfig:
@@ -149,8 +165,19 @@ def scan_cmd(
     loader: Annotated[
         str, typer.Option("--loader", help="Tool-definition format to read")
     ] = "openai",
+    fail_on: Annotated[
+        ScanFailOn,
+        typer.Option(
+            "--fail-on",
+            help="Exit non-zero if any finding is at or above this severity (none disables it)",
+        ),
+    ] = ScanFailOn.none,
 ) -> None:
-    """Flag cost-amplification patterns in your tool definitions. Offline: no key, no spend."""
+    """Flag cost-amplification patterns in your tool definitions. Offline: no key, no spend.
+
+    Exits 0 by default. With ``--fail-on high|medium|low`` it exits 1 when a finding reaches that
+    severity, so a CI step (see the dowbench-scan Action) fails the build on a new pattern.
+    """
     try:
         data = json.loads(tools_path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError) as exc:
@@ -164,6 +191,11 @@ def scan_cmd(
     report = scan_tools(tools)
     text = render(report, "plain" if fmt is ScanFormat.plain else "markdown")
     typer.echo(text, nl=False)
+    if fail_on is not ScanFailOn.none and report.has_at_least(_FAIL_RANK[fail_on]):
+        typer.echo(
+            f"\nFAIL: one or more findings are at or above severity '{fail_on.value}'.", err=True
+        )
+        raise typer.Exit(1)
 
 
 @app.command("estimate")

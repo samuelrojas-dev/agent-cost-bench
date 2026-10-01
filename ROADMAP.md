@@ -15,19 +15,19 @@ lands before architecture, which lands before scale, rigor, breadth and release.
 | 2 | Extensible plugins via entry points (providers / defenses / attacks) | [0021](docs/adr/0021-plugin-entry-points.md) | ✅ done |
 | 7a | OSS hygiene: SECURITY, CONTRIBUTING, CODE_OF_CONDUCT, issue/PR templates, CODEOWNERS | — | ✅ done |
 
-### Active — the adoption pivot
+### The adoption pivot (delivered)
 
 A stranger needs a reason to care in two minutes, no API key. `dowbench scan` reads their tool
-definitions and flags the cost-amplification patterns the pilot measured. See
-[ADR 0022](docs/adr/0022-static-tool-risk-scan.md); this is now the top priority, ahead of the
-internal phases below.
+definitions and flags the cost-amplification patterns the pilot measured, and a GitHub Action
+fails their CI on a new one. See [ADR 0022](docs/adr/0022-static-tool-risk-scan.md). All four
+phases below have landed; the scan is now the project's front door.
 
 | Phase | What | ADR | Status |
 |---|---|---|---|
 | S-A | `load_tools` + `from_openai_tools` + heuristic engine + `dowbench scan` + offline tests | [0022](docs/adr/0022-static-tool-risk-scan.md) | ✅ done |
 | S-B | README hero + 60-second demo rewritten around `scan`; "Results (pilot)" becomes the evidence | [0022](docs/adr/0022-static-tool-risk-scan.md) | ✅ done |
 | S-C | `from_langchain` loader + `from_openapi`, as `dowbench.tool_loaders` plugins | [0022](docs/adr/0022-static-tool-risk-scan.md) | ✅ done |
-| S-D | `dowbench-scan` GitHub Action: fail a user's CI on a new cost-amplifying pattern | [0022](docs/adr/0022-static-tool-risk-scan.md) | ⬜ next |
+| S-D | `dowbench-scan` GitHub Action: fail a user's CI on a new cost-amplifying pattern | [0022](docs/adr/0022-static-tool-risk-scan.md) | ✅ done |
 
 ### Deferred / planned (internal value, after the pivot)
 
@@ -39,12 +39,12 @@ internal phases below.
 | 6 | External validity: OpenAI adapter (offline-tested; real pilot is a separate authorized step) | tbd | ⏸️ deferred |
 | 7b | Release: `ARCHITECTURE.md`, semver + PyPI release, coverage gate | tbd | ⬜ planned |
 
-Ordering note: foundation (0–2) and OSS hygiene (7a) landed. The **scan pivot (S-A…S-D)** is
-now top priority — it is the first thing a newcomer touches. Concurrency (3) and statistical
-rigor (5) are internal value a stranger does not see in two minutes, so they move behind the
-scan; OpenAI (6) stays deferred. ADR numbers are assigned at creation, so the provisional
-numbers in ADR 0019's table shifted (0022 is the scan). Phases 3–5 still start only after a
-per-phase time/cost estimate is agreed.
+Ordering note: foundation (0–2), OSS hygiene (7a) and the **scan pivot (S-A…S-D)** have landed —
+the scan is the first thing a newcomer touches. Next up are the internal-value phases: concurrency
+(3) and statistical rigor (5) are value a stranger does not see in two minutes, and OpenAI (6)
+stays deferred. ADR numbers are assigned at creation, so the provisional numbers in ADR 0019's
+table shifted (0022 is the scan). Phases 3–5 still start only after a per-phase time/cost estimate
+is agreed.
 
 ## Known bugs (Phase 1)
 

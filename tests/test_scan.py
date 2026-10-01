@@ -27,6 +27,8 @@ from dowbench.scan.engine import ScanReport
 
 runner = CliRunner()
 FIXTURE = Path(__file__).parent / "fixtures" / "tools_openai.json"
+# The toolset the README's 60-second demo scans; this test pins the counts it documents.
+README_DEMO = Path(__file__).parent.parent / "examples" / "agent_tools.json"
 
 
 def _tool(name: str, description: str = "", **props: object) -> ToolSpec:
@@ -257,3 +259,11 @@ def test_cli_scan_rejects_malformed_tool_structure(tmp_path: Path) -> None:
     f.write_text('[{"type": "function"}]', encoding="utf-8")
     result = runner.invoke(app, ["scan", str(f)])
     assert result.exit_code == 2
+
+
+def test_readme_demo_toolset_scans_as_documented() -> None:
+    # Guards the counts the README's 60-second demo shows, so the doc cannot drift from reality.
+    report = scan_tools(from_openai_tools(json.loads(README_DEMO.read_text(encoding="utf-8"))))
+    assert report.counts() == {"high": 3, "medium": 2, "low": 1}
+    # send_email returns nothing an attacker can inflate: it must not be flagged.
+    assert all(f.tool != "send_email" for f in report.findings)

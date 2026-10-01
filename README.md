@@ -4,19 +4,31 @@
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 
-**How much can an attacker make your LLM agent spend, and which defense actually stops it?**
+**Could an attacker make your LLM agent run up its own bill? Scan your tools and find out — offline, no API key.**
 
-dowbench is a reproducible benchmark of *denial-of-wallet* (DoW) attacks against
-tool-using LLM agents. It runs an attack × defense × model matrix against real
-providers and scores every episode on **provider-billed tokens and USD**, not on an LLM
-judge's opinion. It also charges each defense for what it costs on benign tasks, so a
-defense that blocks everything does not win.
+```bash
+git clone https://github.com/samuelrojas-dev/agent-cost-bench && cd agent-cost-bench
+pip install -e .            # PyPI release is on the roadmap; for now, install from source
+dowbench scan examples/agent_tools.json
+```
 
-> **Status: alpha.** The harness, safety rails and adapters for Gemini and Claude work
-> and are tested. Preliminary findings from pilot runs are published in
-> [Results (pilot)](#results-pilot) below — replay-verified and reproducible, but still
-> early pilots (`n = 1`–`5`): read them as directional, not settled rates. All numbers come
-> from real, reproducible runs.
+`dowbench scan` reads your tool definitions and flags the ones whose *shape* matches the
+cost-amplification patterns this project measured against real models — an unbounded tool
+result, a pagination loop with no cap, a field that relays prior output back in. It makes
+**no provider call, needs no key, and spends nothing**: it reads schemas only, so a finding
+is a *pattern match*, not a prediction of your bill. You get a specific answer in seconds —
+*which tool could blow up your cost, why, and the fix.*
+
+Behind the scan is a reproducible **denial-of-wallet (DoW) benchmark**: an attack × defense ×
+model matrix scored on **provider-billed tokens and USD** (not an LLM judge), which is where
+the patterns — and the one real finding the scan is built on (an **8.8×** amplification that
+only a result cap stopped) — come from. The scan is the front door; the benchmark is the
+evidence.
+
+> **Status: alpha.** The scan, the harness, the safety rails and the Gemini/Claude adapters
+> work and are tested. Pilot findings are in [The evidence behind the scan](#the-evidence-behind-the-scan-pilot)
+> below — replay-verified and reproducible, but early pilots (`n = 1`–`5`): directional, not
+> settled rates. Every number comes from a real, reproducible run.
 
 ## Why another tool
 
@@ -36,17 +48,66 @@ with a judge or a divergence detector, and they do not compare defenses. dowbenc
 See [docs/related-work.md](docs/related-work.md) for the comparison, checked against the
 source of each tool.
 
-## Quickstart (no API key, no cost)
+## 60-second demo: scan a toolset (no API key, no cost)
 
-The built-in mock provider behaves like a maximally susceptible model and never touches
-the network. After `pip install -e .`, three commands run the whole loop — run, replay,
-report — entirely offline:
+[`examples/agent_tools.json`](examples/agent_tools.json) is a small support-agent toolset in
+the OpenAI function-calling format — the format LangChain, CrewAI and the raw SDKs all emit.
+Scan it:
 
 ```bash
-git clone https://github.com/samuelrojas-dev/agent-cost-bench
-cd agent-cost-bench
-pip install -e .
+dowbench scan examples/agent_tools.json --format plain
+```
 
+```
+Scanned 5 tool(s): 3 high, 2 medium, 1 low.
+
+[HIGH]   unbounded-result  —  web_search
+  'web_search' looks like it returns external data but has no parameter that limits the
+  result size, so one call can flood the context with billed input tokens.
+  pattern: context_bloat (bloat-verify-001)  [ADR 0016, ADR 0017]
+  why: This shape amplified episode cost 8.8x in our pilot; only a result cap stopped it.
+  fix: Add a size/limit parameter, or apply the `result_cap` defense.
+
+[HIGH]   unbounded-result  —  read_url
+[HIGH]   unbounded-result  —  list_tickets
+[MEDIUM] unbounded-pagination  —  list_tickets
+[MEDIUM] result-relay  —  draft_reply
+[LOW]    no-call-budget  —  (toolset)
+```
+
+(Abridged: the remaining findings print the same message/pattern/why/fix block as the first;
+run the command to see them in full.) `send_email` is **not** flagged — it returns nothing an
+attacker can inflate. Default output is Markdown (drop `--format plain` for a table and
+per-finding detail); `--loader` selects the tool format. The scan reads schemas only: no
+network, no key, no spend.
+
+**Honesty (this project's first rule).** A finding is a *pattern match against a measured
+shape*, not a prediction of your cost — the scan can't see your traffic, so it never says
+"your tool will cost 8.8×". It says *this tool has the shape that did, in our pilot, and here
+is the fix*. Absence of a finding is not a proof of safety; the scan checks known shapes only.
+
+### What the scan looks for
+
+Each rule maps a shape visible in your tool schema to an attack family the benchmark measured
+and the defense that stops it ([ADR 0022](docs/adr/0022-static-tool-risk-scan.md)):
+
+| Rule | Shape in the schema | Pattern (evidence) | Fix |
+|---|---|---|---|
+| `unbounded-result` | a retrieval tool with no size/limit parameter | `context_bloat` / `bloat-verify-001` (**8.8×**) | add a limit, or `result_cap` |
+| `unbounded-pagination` | a cursor/offset input with no page cap | `tool_loop` | `loop_detect` / a max-pages bound |
+| `result-relay` | a free-text field that echoes prior output back in | `growing_arguments` | cap or omit the relayed field |
+| `no-call-budget` | many tools, nothing bounding total calls | `output_flood` / loop | `loop_detect` / `turn_limit` |
+
+Loaders are plugins ([`dowbench.tool_loaders`](docs/adr/0021-plugin-entry-points.md)), so a new
+framework format is added without touching the engine.
+
+## Run the full benchmark (no API key, no cost)
+
+The scan tells you *which shapes are risky*; the benchmark is *how that was measured*. The
+built-in mock provider behaves like a maximally susceptible model and never touches the
+network, so three commands run the whole loop — run, replay, report — entirely offline:
+
+```bash
 dowbench run configs/pilot.yaml           # 1. run the matrix on the mock; writes results/raw/pilot-mock/ (incl. cassette.jsonl)
 dowbench replay results/raw/pilot-mock    # 2. replay that run from its cassette: no calls, no spend, same numbers
 dowbench report results/raw/pilot-mock    # 3. render a Markdown report of the run
@@ -135,7 +196,7 @@ dowbench replay results/raw/<run>        # re-runs the episodes from the cassett
 Replay reproduces the run's `summary.json` byte for byte, so its headline numbers are
 verifiable by hashing that file; replay refuses (instead of calling a model) if the code has
 changed how a request is built (ADR 0015). The pilot runs so far, their findings and their
-verification hashes are collected in [Results (pilot)](#results-pilot) below.
+verification hashes are collected in [The evidence behind the scan](#the-evidence-behind-the-scan-pilot) below.
 
 ## How attacks are scored
 
@@ -153,7 +214,13 @@ Full definitions and the reasons behind them are in
 [ADR 0001](docs/adr/0001-primary-metric.md) and
 [ADR 0003](docs/adr/0003-safety-ceiling-and-censoring.md).
 
-## Results (pilot)
+## The evidence behind the scan (pilot)
+
+The scan's heuristics are not guesses — each one is a shape the benchmark actually measured.
+The headline rule, `unbounded-result`, is built on the single real finding below: one attack,
+`bloat-verify-001`, amplified an episode's cost **8.8×**, and of five defenses only
+`result_cap` stopped it. That is why the scan flags an unbounded tool result as `HIGH` and
+recommends a result cap.
 
 > **Provenance.** The numbers below come from the maintainer's **local** runs on
 > `gemini-3.5-flash-lite`; they were **not reproduced in CI**. The files replay needs for both

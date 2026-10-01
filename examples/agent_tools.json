@@ -1,0 +1,74 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "web_search",
+      "description": "Search the web and return the matching results.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {"type": "string", "description": "the search query"}
+        },
+        "required": ["query"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "read_url",
+      "description": "Fetch a web page and return its text content.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "url": {"type": "string", "description": "the page to fetch"}
+        },
+        "required": ["url"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "list_tickets",
+      "description": "List support tickets, one page at a time.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {"type": "string"},
+          "cursor": {"type": "string", "description": "pagination cursor"}
+        }
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "draft_reply",
+      "description": "Draft a reply, given the conversation so far.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "history": {"type": "string", "description": "the prior conversation to reply to"},
+          "tone": {"type": "string"}
+        }
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "send_email",
+      "description": "Send an email to a recipient.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "to": {"type": "string"},
+          "subject": {"type": "string"},
+          "body": {"type": "string"}
+        },
+        "required": ["to", "subject", "body"]
+      }
+    }
+  }
+]

@@ -370,6 +370,40 @@ def test_cli_scan_rejects_malformed_tool_structure(tmp_path: Path) -> None:
     assert result.exit_code == 2
 
 
+def test_has_at_least_compares_by_severity_rank() -> None:
+    report = scan_tools([_tool("web_search", "search")])  # one HIGH finding
+    assert report.has_at_least("high") is True
+    assert report.has_at_least("low") is True
+    empty = ScanReport(tool_count=0, findings=[])
+    assert empty.has_at_least("low") is False
+
+
+def test_cli_scan_fail_on_high_exits_nonzero_when_a_high_finding_exists() -> None:
+    result = runner.invoke(app, ["scan", str(FIXTURE), "--fail-on", "high", "--format", "plain"])
+    assert result.exit_code == 1
+    assert "FAIL" in result.output
+
+
+def test_cli_scan_fail_on_none_is_the_default_and_exits_zero() -> None:
+    result = runner.invoke(app, ["scan", str(FIXTURE), "--format", "plain"])
+    assert result.exit_code == 0
+    assert "FAIL" not in result.output
+
+
+def test_cli_scan_fail_on_high_exits_zero_when_only_lower_findings_exist(tmp_path: Path) -> None:
+    # A single relay tool: one MEDIUM finding, no HIGH, and too few tools for no-call-budget.
+    f = tmp_path / "t.json"
+    f.write_text(
+        '[{"type":"function","function":{"name":"draft","description":"d",'
+        '"parameters":{"type":"object","properties":{"history":{"type":"string"}}}}}]',
+        encoding="utf-8",
+    )
+    result = runner.invoke(app, ["scan", str(f), "--fail-on", "high", "--format", "plain"])
+    assert result.exit_code == 0
+    result_medium = runner.invoke(app, ["scan", str(f), "--fail-on", "medium", "--format", "plain"])
+    assert result_medium.exit_code == 1
+
+
 def test_cli_scan_reads_an_openapi_spec_with_the_openapi_loader() -> None:
     result = runner.invoke(
         app, ["scan", str(OPENAPI_FIXTURE), "--loader", "openapi", "--format", "plain"]

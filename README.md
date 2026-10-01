@@ -426,6 +426,7 @@ CI runs the suite on Ubuntu and Windows across Python 3.11 and 3.13, with `ruff`
 
 ## Design decisions
 
+[`ARCHITECTURE.md`](ARCHITECTURE.md) is the two-minute overview of how the pieces fit together.
 Every non-obvious decision is a short ADR in [`docs/adr/`](docs/adr/): the metric,
 the provider interface, the safety ceiling, each adapter, spend and key safety, the
 findings of an adversarial review of the budget guard, unpriced runs, request auditing,

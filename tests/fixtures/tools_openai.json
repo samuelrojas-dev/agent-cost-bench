@@ -1,0 +1,68 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "web_search",
+      "description": "Search the web and return matching documents.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {"type": "string", "description": "the search query"}
+        },
+        "required": ["query"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "list_issues",
+      "description": "List repository issues, paginated.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "repo": {"type": "string"},
+          "cursor": {"type": "string", "description": "pagination cursor"}
+        }
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "summarize",
+      "description": "Summarize the running conversation.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "history": {"type": "string", "description": "prior conversation to summarize"}
+        }
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_weather",
+      "description": "Return the current temperature for a city.",
+      "parameters": {
+        "type": "object",
+        "properties": {"city": {"type": "string"}}
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "search_docs",
+      "description": "Search documentation with a bounded result count.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {"type": "string"},
+          "max_results": {"type": "integer", "description": "cap on results"}
+        }
+      }
+    }
+  }
+]

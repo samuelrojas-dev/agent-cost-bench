@@ -23,9 +23,11 @@ Set Theme "Catppuccin Mocha"
 Set Framerate 24
 Set TypingSpeed 55ms
 
-# A clean, minimal prompt; hide the setup so the recording opens on an empty prompt.
+# A clean, minimal prompt. The leading newline means every prompt starts on its own line, so
+# the next prompt never glues to the scan's last output line (the plain report, like many CLI
+# outputs, ends without a trailing newline). Hide the setup so the recording opens clean.
 Hide
-Type "export PS1='$ '"
+Type "export PS1='\n$ '"
 Enter
 Type "clear"
 Enter
@@ -35,4 +37,6 @@ Sleep 800ms
 Type "dowbench scan examples/agent_tools.json --format plain"
 Sleep 600ms
 Enter
+
+# Hold on the full report; the next prompt lands cleanly on its own line (see PS1 above).
 Sleep 3500ms

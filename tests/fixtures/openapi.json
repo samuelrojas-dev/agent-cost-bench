@@ -1,0 +1,52 @@
+{
+  "openapi": "3.0.3",
+  "info": {"title": "Support API", "version": "1.0.0"},
+  "paths": {
+    "/search": {
+      "get": {
+        "operationId": "searchArticles",
+        "summary": "Search knowledge-base articles.",
+        "parameters": [
+          {"name": "q", "in": "query", "schema": {"type": "string"}}
+        ]
+      }
+    },
+    "/articles": {
+      "get": {
+        "operationId": "listArticles",
+        "summary": "List articles with a bounded page size.",
+        "parameters": [
+          {"name": "limit", "in": "query", "schema": {"type": "integer"}},
+          {"$ref": "#/components/parameters/Cursor"}
+        ]
+      }
+    },
+    "/replies": {
+      "post": {
+        "operationId": "createReply",
+        "summary": "Create a reply from the prior conversation.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/Reply"}
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "Cursor": {"name": "cursor", "in": "query", "schema": {"type": "string"}}
+    },
+    "schemas": {
+      "Reply": {
+        "type": "object",
+        "properties": {
+          "history": {"type": "string"},
+          "tone": {"type": "string"}
+        }
+      }
+    }
+  }
+}

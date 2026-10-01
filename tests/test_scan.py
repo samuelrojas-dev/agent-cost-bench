@@ -12,13 +12,16 @@ from importlib.metadata import EntryPoint
 from pathlib import Path
 
 import pytest
+from pydantic import BaseModel
 from typer.testing import CliRunner
 
 from dowbench.cli import app
 from dowbench.providers.base import ToolSpec
 from dowbench.scan import (
     ToolLoadError,
+    from_langchain,
     from_openai_tools,
+    from_openapi,
     load_tools,
     render,
     scan_tools,
@@ -27,6 +30,7 @@ from dowbench.scan.engine import ScanReport
 
 runner = CliRunner()
 FIXTURE = Path(__file__).parent / "fixtures" / "tools_openai.json"
+OPENAPI_FIXTURE = Path(__file__).parent / "fixtures" / "openapi.json"
 # The toolset the README's 60-second demo scans; this test pins the counts it documents.
 README_DEMO = Path(__file__).parent.parent / "examples" / "agent_tools.json"
 
@@ -125,6 +129,111 @@ def test_load_tools_rejects_a_loader_that_returns_non_toolspec() -> None:
 
     with pytest.raises(ToolLoadError, match="ToolSpec"):
         load_tools("bad", [], source=source)
+
+
+# --- loaders: langchain ----------------------------------------------------------------------
+
+
+class _FakeTool:
+    """A duck-typed stand-in for a LangChain BaseTool (no LangChain dependency in tests)."""
+
+    def __init__(
+        self, name: str, description: str, *, args: object = None, args_schema: object = None
+    ):
+        self.name = name
+        self.description = description
+        if args is not None:
+            self.args = args
+        if args_schema is not None:
+            self.args_schema = args_schema
+
+
+def test_from_langchain_reads_live_objects_with_an_args_mapping() -> None:
+    tools = from_langchain(
+        [_FakeTool("web_search", "Search the web", args={"query": {"type": "string"}})]
+    )
+    assert tools[0].name == "web_search"
+    assert list(tools[0].parameters["properties"]) == ["query"]
+
+
+def test_from_langchain_reads_a_pydantic_args_schema() -> None:
+    class Args(BaseModel):
+        query: str
+        cursor: str
+
+    tools = from_langchain([_FakeTool("list_items", "List items", args_schema=Args)])
+    assert set(tools[0].parameters["properties"]) == {"query", "cursor"}
+
+
+def test_from_langchain_reads_the_serialized_dict_shape() -> None:
+    tools = from_langchain(
+        [{"name": "summarize", "description": "s", "args": {"history": {"type": "string"}}}]
+    )
+    assert tools[0].name == "summarize"
+    assert list(tools[0].parameters["properties"]) == ["history"]
+
+
+def test_from_langchain_tool_without_args_gets_an_empty_schema() -> None:
+    tools = from_langchain([_FakeTool("ping", "no args")])
+    assert tools[0].parameters == {"type": "object", "properties": {}}
+
+
+def test_from_langchain_rejects_an_object_without_a_name() -> None:
+    with pytest.raises(ToolLoadError, match="no 'name'"):
+        from_langchain([_FakeTool("", "nameless")])
+
+
+# --- loaders: openapi ------------------------------------------------------------------------
+
+
+def test_from_openapi_maps_each_operation_to_a_tool() -> None:
+    spec = json.loads(OPENAPI_FIXTURE.read_text(encoding="utf-8"))
+    tools = {t.name: t for t in from_openapi(spec)}
+    assert set(tools) == {"searchArticles", "listArticles", "createReply"}
+    # $ref parameter (cursor) and $ref request body (Reply.history) are resolved.
+    assert "cursor" in tools["listArticles"].parameters["properties"]
+    assert "history" in tools["createReply"].parameters["properties"]
+
+
+def test_from_openapi_findings_match_the_operation_shapes() -> None:
+    spec = json.loads(OPENAPI_FIXTURE.read_text(encoding="utf-8"))
+    report = scan_tools(from_openapi(spec))
+    by_tool = {(f.tool, f.rule) for f in report.findings}
+    assert ("searchArticles", "unbounded-result") in by_tool  # retrieval, no limit
+    assert ("listArticles", "unbounded-pagination") in by_tool  # cursor, no page cap
+    assert ("createReply", "result-relay") in by_tool  # history field relayed
+    # listArticles has a `limit`, so it must NOT be flagged unbounded-result.
+    assert ("listArticles", "unbounded-result") not in by_tool
+
+
+def test_from_openapi_generates_a_name_when_operationid_is_absent() -> None:
+    spec = {"paths": {"/things": {"get": {"summary": "no id"}}}}
+    tools = from_openapi(spec)
+    assert tools[0].name == "get__things"
+
+
+def test_from_openapi_ignores_a_broken_ref_without_raising() -> None:
+    spec = {
+        "paths": {"/x": {"get": {"operationId": "x", "parameters": [{"$ref": "#/nope/missing"}]}}}
+    }
+    tools = from_openapi(spec)
+    assert tools[0].parameters["properties"] == {}
+
+
+@pytest.mark.parametrize("bad", [42, {}, {"paths": "not a dict"}, []])
+def test_from_openapi_rejects_a_non_spec(bad: object) -> None:
+    with pytest.raises(ToolLoadError, match="OpenAPI"):
+        from_openapi(bad)
+
+
+# --- loaders: registry dispatch for the new loaders ------------------------------------------
+
+
+@pytest.mark.parametrize("loader", ["openai", "langchain", "openapi"])
+def test_all_builtin_loaders_are_registered(loader: str) -> None:
+    from dowbench import registry
+
+    assert loader in registry.names("dowbench.tool_loaders")
 
 
 # --- engine: positive matches ----------------------------------------------------------------
@@ -259,6 +368,15 @@ def test_cli_scan_rejects_malformed_tool_structure(tmp_path: Path) -> None:
     f.write_text('[{"type": "function"}]', encoding="utf-8")
     result = runner.invoke(app, ["scan", str(f)])
     assert result.exit_code == 2
+
+
+def test_cli_scan_reads_an_openapi_spec_with_the_openapi_loader() -> None:
+    result = runner.invoke(
+        app, ["scan", str(OPENAPI_FIXTURE), "--loader", "openapi", "--format", "plain"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "searchArticles" in result.output
+    assert "unbounded-result" in result.output
 
 
 def test_readme_demo_toolset_scans_as_documented() -> None:

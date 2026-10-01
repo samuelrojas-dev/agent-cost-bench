@@ -26,8 +26,8 @@ internal phases below.
 |---|---|---|---|
 | S-A | `load_tools` + `from_openai_tools` + heuristic engine + `dowbench scan` + offline tests | [0022](docs/adr/0022-static-tool-risk-scan.md) | ✅ done |
 | S-B | README hero + 60-second demo rewritten around `scan`; "Results (pilot)" becomes the evidence | [0022](docs/adr/0022-static-tool-risk-scan.md) | ✅ done |
-| S-C | `from_langchain` loader + one more (`from_openapi` / CrewAI), as `dowbench.tool_loaders` plugins | [0022](docs/adr/0022-static-tool-risk-scan.md) | ⬜ next |
-| S-D | `dowbench-scan` GitHub Action: fail a user's CI on a new cost-amplifying pattern | [0022](docs/adr/0022-static-tool-risk-scan.md) | ⬜ planned |
+| S-C | `from_langchain` loader + `from_openapi`, as `dowbench.tool_loaders` plugins | [0022](docs/adr/0022-static-tool-risk-scan.md) | ✅ done |
+| S-D | `dowbench-scan` GitHub Action: fail a user's CI on a new cost-amplifying pattern | [0022](docs/adr/0022-static-tool-risk-scan.md) | ⬜ next |
 
 ### Deferred / planned (internal value, after the pivot)
 

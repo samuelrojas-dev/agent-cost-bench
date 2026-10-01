@@ -9,7 +9,14 @@ of the user's actual cost (CLAUDE.md: no invented numbers).
 from __future__ import annotations
 
 from dowbench.scan.engine import Finding, ScanReport, Severity, scan_tools
-from dowbench.scan.loaders import LOADER_GROUP, ToolLoadError, from_openai_tools, load_tools
+from dowbench.scan.loaders import (
+    LOADER_GROUP,
+    ToolLoadError,
+    from_langchain,
+    from_openai_tools,
+    from_openapi,
+    load_tools,
+)
 from dowbench.scan.report import render
 
 __all__ = [
@@ -18,7 +25,9 @@ __all__ = [
     "ScanReport",
     "Severity",
     "ToolLoadError",
+    "from_langchain",
     "from_openai_tools",
+    "from_openapi",
     "load_tools",
     "render",
     "scan_tools",

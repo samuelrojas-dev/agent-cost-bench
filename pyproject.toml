@@ -74,6 +74,8 @@ anthropic = "dowbench.providers.claude:map_sut_response"
 # declaring the same entry point from its own package.
 [project.entry-points."dowbench.tool_loaders"]
 openai = "dowbench.scan.loaders:from_openai_tools"
+langchain = "dowbench.scan.loaders:from_langchain"
+openapi = "dowbench.scan.loaders:from_openapi"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/dowbench"]

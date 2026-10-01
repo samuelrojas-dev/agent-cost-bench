@@ -6,6 +6,10 @@
 
 **Could an attacker make your LLM agent run up its own bill? Scan your tools and find out — offline, no API key.**
 
+<p align="center">
+  <img src="docs/assets/scan-demo.gif" alt="dowbench scan reading a toolset and flagging its cost-amplification patterns" width="820">
+</p>
+
 ```bash
 git clone https://github.com/samuelrojas-dev/agent-cost-bench && cd agent-cost-bench
 pip install -e .            # PyPI release is on the roadmap; for now, install from source

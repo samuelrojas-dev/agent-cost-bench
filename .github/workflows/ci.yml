@@ -69,6 +69,30 @@ jobs:
       - name: Verify published cassettes replay to their committed, README-published hashes
         run: python scripts/verify_cassettes.py
 
+  scan-action:
+    name: scan-action (self-test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Dog-foods the dowbench-scan composite action against this checkout (version: "" uses the
+    # dowbench installed below, not a git ref), so the action can't rot. fail-on: none keeps our
+    # own build green even though the example toolset has HIGH findings; the --fail-on exit codes
+    # themselves are covered by the CLI tests.
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install dowbench from this checkout
+        run: python -m pip install -e .
+      - name: Run the dowbench-scan action on the example toolset
+        uses: ./.github/actions/dowbench-scan
+        with:
+          tools: examples/agent_tools.json
+          fail-on: none
+          version: ""
+
   gitleaks:
     runs-on: ubuntu-latest
     timeout-minutes: 10

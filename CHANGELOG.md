@@ -21,6 +21,11 @@ All notable changes to this project are documented here. The format follows
   dependency, plus its serialized dict shape) and **`openapi`** (maps each OpenAPI 3.x operation
   to a tool, resolving local `$ref`s). Phase S-C,
   [ADR 0022](docs/adr/0022-static-tool-risk-scan.md).
+- **`dowbench scan --fail-on high|medium|low`** — exits non-zero when a finding reaches that
+  severity (default `none`, report-only), and a **`dowbench-scan` composite GitHub Action**
+  (`.github/actions/dowbench-scan`) wrapping it so a cost-amplifying pattern fails a user's CI.
+  A `scan-action` CI job dog-foods the Action against the example toolset. Phase S-D,
+  [ADR 0022](docs/adr/0022-static-tool-risk-scan.md).
 - **Results (pilot)** section in the README, reporting the first real findings from the
   maintainer's local `gemini-3.5-flash-lite` runs (pilot v2 — 10 attacks × 5 defenses; and a
   focus run of `bloat-verify-001` × 5 defenses, 5 repeats). Numbers are attributed to those

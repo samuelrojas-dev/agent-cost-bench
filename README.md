@@ -105,6 +105,31 @@ tool per operation: `dowbench scan openapi.json --loader openapi`). Loaders are 
 ([`dowbench.tool_loaders`](docs/adr/0021-plugin-entry-points.md)), so a new framework format is
 added without touching the engine.
 
+### Guard your CI
+
+`dowbench scan --fail-on high` exits non-zero when a finding reaches that severity, so a tool or
+prompt change that reintroduces a cost-amplifying pattern fails the build. A composite Action
+wraps it:
+
+```yaml
+# .github/workflows/dowbench.yml
+name: dowbench scan
+on: [pull_request]
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: samuelrojas-dev/agent-cost-bench/.github/actions/dowbench-scan@main
+        with:
+          tools: path/to/your/tools.json   # or an OpenAPI spec with loader: openapi
+          fail-on: high                     # high | medium | low | none
+```
+
+Pin `@main` to a tag or commit SHA for reproducible CI. The step reads your tool schemas only —
+no API key, no provider call, no spend. `--fail-on none` (the default on the CLI) reports without
+failing the build.
+
 ## Run the full benchmark (no API key, no cost)
 
 The scan tells you *which shapes are risky*; the benchmark is *how that was measured*. The

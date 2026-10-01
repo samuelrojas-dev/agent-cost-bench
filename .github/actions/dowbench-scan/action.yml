@@ -1,0 +1,58 @@
+name: "dowbench scan"
+description: >-
+  Scan an agent's tool definitions for cost-amplification (denial-of-wallet) patterns and fail
+  the build when one reaches a severity. Offline: no API key, no provider call, no spend.
+author: "dowbench"
+branding:
+  icon: "shield"
+  color: "purple"
+
+inputs:
+  tools:
+    description: "Path to the tool definitions file to scan (relative to the workspace)."
+    required: true
+  loader:
+    description: "Tool-definition format: openai (default), langchain, openapi, or a plugin name."
+    required: false
+    default: "openai"
+  fail-on:
+    description: "Fail the build if any finding is at or above this severity: high, medium, low, or none."
+    required: false
+    default: "high"
+  format:
+    description: "Report format printed to the job log: markdown or plain."
+    required: false
+    default: "markdown"
+  version:
+    description: >-
+      dowbench version to install, as a git ref of this repository (branch, tag or SHA). Pin a tag
+      or SHA for reproducible CI. Set to an empty string to use a dowbench already on PATH (e.g.
+      installed by an earlier step), in which case no install or Python setup is performed.
+    required: false
+    default: "main"
+  python-version:
+    description: "Python version to set up before installing dowbench (ignored when version is empty)."
+    required: false
+    default: "3.13"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      if: inputs.version != ''
+      uses: actions/setup-python@v7
+      with:
+        python-version: ${{ inputs.python-version }}
+    - name: Install dowbench
+      if: inputs.version != ''
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install "dowbench @ git+https://github.com/samuelrojas-dev/agent-cost-bench@${{ inputs.version }}"
+    - name: Scan tool definitions
+      shell: bash
+      run: >-
+        dowbench scan "${{ inputs.tools }}"
+        --loader "${{ inputs.loader }}"
+        --fail-on "${{ inputs.fail-on }}"
+        --format "${{ inputs.format }}"

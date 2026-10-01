@@ -1,7 +1,8 @@
-"""Command-line interface: list, estimate, run, report."""
+"""Command-line interface: list, scan, estimate, run, report."""
 
 from __future__ import annotations
 
+import json
 import math
 from enum import StrEnum
 from pathlib import Path
@@ -32,6 +33,7 @@ from dowbench.runner.matrix import plan_episodes
 from dowbench.runner.rate_limit import RateLimitReached
 from dowbench.runner.replay import CassetteDriftError, replay_run
 from dowbench.runner.store import RunStore
+from dowbench.scan import ToolLoadError, load_tools, render, scan_tools
 from dowbench.sut import load_agent
 
 app = typer.Typer(no_args_is_help=True, help="Denial-of-wallet benchmark for LLM agents.")
@@ -49,6 +51,11 @@ class Listable(StrEnum):
     attacks = "attacks"
     benign = "benign"
     defenses = "defenses"
+
+
+class ScanFormat(StrEnum):
+    markdown = "markdown"
+    plain = "plain"
 
 
 def _load_config(path: Path, provider: str | None) -> RunConfig:
@@ -128,6 +135,35 @@ def list_items(what: Annotated[Listable, typer.Argument(help="What to list")]) -
         for name, cls in sorted(defense_registry().items()):
             doc = (cls.__doc__ or "").strip().splitlines()[0]
             typer.echo(f"{name:<14} {doc}")
+
+
+@app.command("scan")
+def scan_cmd(
+    tools_path: Annotated[
+        Path,
+        typer.Argument(exists=True, dir_okay=False, help="Tool definitions as JSON"),
+    ],
+    fmt: Annotated[
+        ScanFormat, typer.Option("--format", "-f", help="Report format")
+    ] = ScanFormat.markdown,
+    loader: Annotated[
+        str, typer.Option("--loader", help="Tool-definition format to read")
+    ] = "openai",
+) -> None:
+    """Flag cost-amplification patterns in your tool definitions. Offline: no key, no spend."""
+    try:
+        data = json.loads(tools_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        typer.echo(f"cannot read {tools_path}: {exc}", err=True)
+        raise typer.Exit(2) from None
+    try:
+        tools = load_tools(loader, data)
+    except (ToolLoadError, LookupError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from None
+    report = scan_tools(tools)
+    text = render(report, "plain" if fmt is ScanFormat.plain else "markdown")
+    typer.echo(text, nl=False)
 
 
 @app.command("estimate")

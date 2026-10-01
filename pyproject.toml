@@ -69,6 +69,12 @@ mock = "dowbench.sut:map_mock_response"
 gemini = "dowbench.providers.gemini:map_sut_response"
 anthropic = "dowbench.providers.claude:map_sut_response"
 
+# Tool-definition loaders for `dowbench scan` (ADR 0022): a loader turns a framework's tool
+# export into the neutral ToolSpec list. A third party adds `from_langchain`, CrewAI, etc. by
+# declaring the same entry point from its own package.
+[project.entry-points."dowbench.tool_loaders"]
+openai = "dowbench.scan.loaders:from_openai_tools"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/dowbench"]
 

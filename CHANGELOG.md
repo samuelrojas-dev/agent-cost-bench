@@ -16,6 +16,11 @@ All notable changes to this project are documented here. The format follows
   Phase S-A, [ADR 0022](docs/adr/0022-static-tool-risk-scan.md) (#43).
 - `examples/agent_tools.json` — a small OpenAI-format toolset used by the README's
   60-second scan demo.
+- Two more `dowbench.tool_loaders` for `dowbench scan`: **`langchain`** (reads LangChain tool
+  objects by duck typing — `.name`/`.description`/`.args`/`.args_schema` — so no LangChain
+  dependency, plus its serialized dict shape) and **`openapi`** (maps each OpenAPI 3.x operation
+  to a tool, resolving local `$ref`s). Phase S-C,
+  [ADR 0022](docs/adr/0022-static-tool-risk-scan.md).
 - **Results (pilot)** section in the README, reporting the first real findings from the
   maintainer's local `gemini-3.5-flash-lite` runs (pilot v2 — 10 attacks × 5 defenses; and a
   focus run of `bloat-verify-001` × 5 defenses, 5 repeats). Numbers are attributed to those

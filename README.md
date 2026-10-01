@@ -98,8 +98,12 @@ and the defense that stops it ([ADR 0022](docs/adr/0022-static-tool-risk-scan.md
 | `result-relay` | a free-text field that echoes prior output back in | `growing_arguments` | cap or omit the relayed field |
 | `no-call-budget` | many tools, nothing bounding total calls | `output_flood` / loop | `loop_detect` / `turn_limit` |
 
-Loaders are plugins ([`dowbench.tool_loaders`](docs/adr/0021-plugin-entry-points.md)), so a new
-framework format is added without touching the engine.
+**Where your tools come from.** A `--loader` turns a source into tool schemas. Built in:
+`openai` (the function-calling format, default), `langchain` (LangChain tool objects, read by
+duck typing — `load_tools("langchain", agent.tools)`), and `openapi` (an OpenAPI 3.x spec, one
+tool per operation: `dowbench scan openapi.json --loader openapi`). Loaders are plugins
+([`dowbench.tool_loaders`](docs/adr/0021-plugin-entry-points.md)), so a new framework format is
+added without touching the engine.
 
 ## Run the full benchmark (no API key, no cost)
 

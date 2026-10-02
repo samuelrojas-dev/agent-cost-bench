@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **OpenAI provider adapter** (`dowbench[openai]`, entry point `openai`): `dowbench run` against
+  OpenAI chat models, with strict usage mapping (cached input and reasoning tokens handled
+  disjointly; audio, predicted-output and inconsistent totals refused), key safety (only
+  `OPENAI_API_KEY`, pinned endpoint, `OPENAI_BASE_URL` refused, no retries), and no replay codec
+  (the assistant turn is plain JSON). Because OpenAI has no token-count endpoint, the adapter
+  declares `counts_tokens=False` and the safety ceiling is enforced **after** each call, so the
+  worst case allows one overshoot (2× the ceiling) and the budget guard accounts for it. The
+  `Provider` protocol gains a `counts_tokens` flag (default True; existing providers unchanged).
+  Offline-tested with mocks; a real pilot is a separate authorized step. `configs/pilot-openai.yaml`,
+  [ADR 0023](docs/adr/0023-openai-adapter.md).
+
 ## [0.1.0] - 2026-10-02
 
 First public release — `pip install dowbench`

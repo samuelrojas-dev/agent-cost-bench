@@ -36,7 +36,7 @@ phases below have landed; the scan is now the project's front door.
 | 3 | Concurrency & scale: parallel episodes honouring rate limits | tbd | ⏸️ deferred |
 | 4 | Observability & resilience: structured logs, error taxonomy, transient retries | tbd | ⬜ planned |
 | 5 | Statistical rigor: bootstrap CIs, sample-size guidance, model×defense comparison, `A ≥ 5` sensitivity | tbd | ⏸️ deferred |
-| 6 | External validity: OpenAI adapter (offline-tested; real pilot is a separate authorized step) | tbd | ⏸️ deferred |
+| 6 | External validity: OpenAI adapter (offline-tested ✅; real pilot is a separate authorized step) | [0023](docs/adr/0023-openai-adapter.md) | 🚧 adapter done |
 | 7b | Release: `ARCHITECTURE.md` ✅, semver + PyPI packaging + first publish (v0.1.0 live) ✅, coverage gate (⬜) | tbd | 🚧 in progress |
 
 Ordering note: foundation (0–2), OSS hygiene (7a) and the **scan pivot (S-A…S-D)** have landed —

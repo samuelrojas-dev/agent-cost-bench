@@ -37,7 +37,7 @@ phases below have landed; the scan is now the project's front door.
 | 4 | Observability & resilience: structured logs, error taxonomy, transient retries | tbd | ⬜ planned |
 | 5 | Statistical rigor: bootstrap CIs, sample-size guidance, model×defense comparison, `A ≥ 5` sensitivity | tbd | ⏸️ deferred |
 | 6 | External validity: OpenAI adapter (offline-tested; real pilot is a separate authorized step) | tbd | ⏸️ deferred |
-| 7b | Release: `ARCHITECTURE.md`, semver + PyPI release, coverage gate | tbd | ⬜ planned |
+| 7b | Release: `ARCHITECTURE.md` ✅, semver + PyPI packaging (✅ build/workflow; first publish pending), coverage gate (⬜) | tbd | 🚧 in progress |
 
 Ordering note: foundation (0–2), OSS hygiene (7a) and the **scan pivot (S-A…S-D)** have landed —
 the scan is the first thing a newcomer touches. Next up are the internal-value phases: concurrency

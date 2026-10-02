@@ -7,6 +7,7 @@ from dowbench.attacks.schema import Signal
 from dowbench.defenses import DefenseSpec, build_defenses
 from dowbench.defenses.base import Abort, Defense
 from dowbench.defenses.limits import LoopDetect, TokenBudget, TurnLimit
+from dowbench.metering.usage import Usage
 from dowbench.providers.base import Request, Response, UsageMappingError
 from dowbench.providers.mock import MockProvider
 
@@ -253,3 +254,36 @@ def test_real_provider_that_cannot_count_is_refused() -> None:
 
     with pytest.raises(ValueError, match="cannot count tokens"):
         _run_with(NoCount({"x": 1}))
+
+
+def test_provider_declaring_no_token_count_runs_via_the_post_call_ceiling() -> None:
+    # counts_tokens=False (e.g. OpenAI, ADR 0023): the pre-call gate is skipped, not an error;
+    # the episode still runs and the post-call total check enforces the ceiling.
+    class PostCall:
+        name = "post-call"
+        simulated = False
+        counts_tokens = False
+
+        def count_tokens(self, request: Request) -> int | None:
+            return None
+
+        def complete(self, request: Request) -> Response:
+            return Response(
+                text="done",
+                tool_calls=[],
+                stop_reason="end_turn",
+                usage=Usage(input_tokens=5, output_tokens=5),
+                raw={"usage": {"prompt_tokens": 5, "completion_tokens": 5}},
+            )
+
+    result = run_episode(
+        PostCall(),
+        model="m",
+        system="s",
+        user_prompt="Summarize the doc.",
+        toolbox=ToolBox("fetch_doc"),
+        defenses=[],
+        ceiling=CEILING,
+    )
+    assert result.status == "completed"
+    assert result.turns == 1 and result.usage.total_tokens == 10

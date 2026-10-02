@@ -25,7 +25,7 @@ def test_console_script_is_registered() -> None:
 
 def test_plugin_entry_point_groups_ship_their_builtins() -> None:
     expected = {
-        "dowbench.providers": {"mock", "gemini", "anthropic"},
+        "dowbench.providers": {"mock", "gemini", "anthropic", "openai"},
         "dowbench.defenses": {"token_budget", "turn_limit", "loop_detect", "result_cap"},
         "dowbench.tool_loaders": {"openai", "langchain", "openapi"},
     }

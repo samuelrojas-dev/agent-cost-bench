@@ -8,6 +8,14 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **PyPI packaging (Phase 7b, part 1).** The version is now single-sourced from
+  `src/dowbench/__init__.py` (hatchling dynamic version, bumped to **0.1.0**); `project.urls` gains
+  Homepage and Changelog; an sdist file set is declared. A `release` workflow
+  (`.github/workflows/release.yml`) builds the sdist/wheel, runs `twine check`, and publishes via
+  **Trusted Publishing (OIDC)** — to TestPyPI on a manual dispatch (dry run) and to PyPI on a
+  `vX.Y.Z` tag, with no stored token. Release process documented in
+  [`docs/RELEASING.md`](docs/RELEASING.md). The first publish and the PyPI version badge follow in a
+  later change once the trusted publishers are configured; the `git clone` install is unchanged.
 - **`dowbench scan`** — an offline, key-free static tool-risk scan that reads tool definitions
   and flags the cost-amplification shapes the pilot measured (`unbounded-result`,
   `unbounded-pagination`, `result-relay`, `no-call-budget`), each tied to an attack family and

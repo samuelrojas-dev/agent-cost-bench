@@ -1,5 +1,6 @@
 # dowbench
 
+[![PyPI](https://img.shields.io/pypi/v/dowbench.svg)](https://pypi.org/project/dowbench/)
 [![CI](https://github.com/samuelrojas-dev/agent-cost-bench/actions/workflows/ci.yml/badge.svg)](https://github.com/samuelrojas-dev/agent-cost-bench/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
@@ -11,9 +12,8 @@
 </p>
 
 ```bash
-git clone https://github.com/samuelrojas-dev/agent-cost-bench && cd agent-cost-bench
-pip install -e .            # PyPI release is on the roadmap; for now, install from source
-dowbench scan examples/agent_tools.json
+pip install dowbench
+dowbench scan your_tools.json   # your agent's tools, in OpenAI / LangChain / OpenAPI form
 ```
 
 `dowbench scan` reads your tool definitions and flags the ones whose *shape* matches the

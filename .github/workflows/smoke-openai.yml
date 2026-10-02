@@ -1,0 +1,57 @@
+name: smoke-openai
+
+# Manual-only real smoke test of the OpenAI adapter (Phase 6b). This is the ONLY workflow that
+# makes a real provider call, and it never runs on push or pull_request — a person must dispatch
+# it and type the confirm word. It runs `configs/smoke-openai.yaml` (2 episodes: the attack
+# bloat-verify-001 and its benign baseline, one model call each) under a hard --budget-usd cap.
+#
+# Key safety: OPENAI_API_KEY is injected ONLY on the run step's env (not job-wide), so no other
+# step can read it. The secret never leaves GitHub Actions. dowbench never logs the key (ADR 0005)
+# and the cassette is sanitized (ADR 0009/0015), so the uploaded artifact carries no secret.
+# The workflow has read-only permissions and commits nothing back.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "run" to confirm a REAL, billed OpenAI call (worst case ~$0.002, hard cap $0.05).'
+        required: true
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: smoke-openai
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    name: real smoke (gpt-6-luna, --budget-usd 0.05)
+    if: ${{ inputs.confirm == 'run' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install dowbench with the OpenAI extra
+        run: python -m pip install -e ".[openai]"
+      - name: Offline preflight — worst-case estimate (no key, no call)
+        run: dowbench estimate configs/smoke-openai.yaml
+      - name: Real run (secret scoped to this step only; hard budget cap)
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: dowbench run configs/smoke-openai.yaml --out results/raw --budget-usd 0.05
+      - name: Show the summary
+        run: cat results/raw/smoke-openai-gpt-6-luna/summary.json
+      - name: Upload the run dir (summary, episodes, calls, run, cassette) for review
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: smoke-openai-run
+          path: results/raw/smoke-openai-gpt-6-luna/
+          retention-days: 7

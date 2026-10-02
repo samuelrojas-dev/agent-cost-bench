@@ -1,0 +1,29 @@
+# OpenAI pilot: the focus finding (bloat-verify-001) against every defense, on gpt-6-luna.
+# OpenAI has no server-side token count, so the ceiling is enforced AFTER each call (ADR 0023):
+# an episode may overshoot by one call, and the worst case is ~2x the ceiling. Priced from the
+# table (openai/gpt-6-luna); run with --budget-usd. Offline until an authorized real run.
+run_name: pilot-openai-gpt-6-luna
+provider: openai
+models: [gpt-6-luna]
+attacks:
+  - bloat-verify-001
+repeats: 1
+seed: 0
+success_threshold: 5.0
+# Ceiling kept well under the priced short-context tier (max_prompt_tokens in pricing.yaml).
+# Because checking is post-call, any episode whose running total passes max_total_tokens is
+# censored and dowbench reports its cost and amplification as a LOWER BOUND (ADR 0003).
+ceiling:
+  max_turns: 6
+  max_tokens_per_call: 512
+  max_total_tokens: 16000
+defenses:
+  - name: none
+  - name: token_budget
+    params: {max_total_tokens: 6000, max_tokens_per_call: 512}
+  - name: turn_limit
+    params: {max_turns: 4}
+  - name: loop_detect
+    params: {max_identical_calls: 2, max_calls_per_tool: 4, max_total_tool_calls: 6}
+  - name: result_cap
+    params: {max_result_chars: 2000}

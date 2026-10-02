@@ -181,6 +181,7 @@ def _jsonable(value: Any) -> Any:
 class AnthropicProvider:
     name = "anthropic"
     simulated = False
+    counts_tokens = True
 
     def __init__(self, client: _Client | None = None) -> None:
         if client is None:

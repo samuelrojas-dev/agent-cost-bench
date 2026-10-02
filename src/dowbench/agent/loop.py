@@ -107,8 +107,10 @@ def run_episode(
             request = rewritten
 
         input_tokens = provider.count_tokens(request)
-        if input_tokens is None and not provider.simulated:
+        if input_tokens is None and not provider.simulated and provider.counts_tokens:
             raise ValueError(f"{provider.name} cannot count tokens; the ceiling would not hold")
+        # A provider that declares counts_tokens=False (e.g. OpenAI, ADR 0023) skips the pre-call
+        # gate below; the post-call total check (further down) enforces the ceiling instead.
         if (
             input_tokens is not None
             and state.usage.total_tokens + input_tokens + request.max_tokens

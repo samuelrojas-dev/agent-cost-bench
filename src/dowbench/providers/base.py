@@ -143,6 +143,14 @@ class Provider(Protocol):
         """True when usage is synthetic; such results are never published."""
         ...
 
+    @property
+    def counts_tokens(self) -> bool:
+        """True when ``count_tokens`` returns a real count, so the ceiling is enforced before
+        each call. False for a provider with no token-count endpoint (e.g. OpenAI): the ceiling
+        is enforced after each call instead, and the worst case allows for one overshoot
+        (ADR 0023)."""
+        ...
+
     def complete(self, request: Request) -> Response: ...
 
     def count_tokens(self, request: Request) -> int | None:

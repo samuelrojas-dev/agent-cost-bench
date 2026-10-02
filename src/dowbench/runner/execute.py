@@ -92,6 +92,26 @@ def build_provider(config: RunConfig, dataset: Dataset) -> Provider:
     return provider
 
 
+def provider_counts_tokens(provider: str) -> bool:
+    """Whether ``provider`` counts tokens before each call (ADR 0023).
+
+    Read offline from the provider factory's declared ``counts_tokens`` (default True) without
+    instantiating it. A provider whose SDK is missing, or that does not declare the flag, is
+    treated as counting — the existing behaviour and a safe default for the estimate.
+    """
+    try:
+        factory = registry.load(PROVIDER_GROUP, provider)
+    except (LookupError, ImportError):
+        return True
+    return bool(getattr(factory, "counts_tokens", True))
+
+
+def _post_call_checked(config: RunConfig) -> bool:
+    """True when the ceiling is enforced after each call, so the worst case allows one overshoot:
+    an agent run (ADR 0012) or a provider that cannot pre-count (ADR 0023)."""
+    return config.agent is not None or not provider_counts_tokens(config.provider)
+
+
 def model_prices(config: RunConfig, prices: PriceTable) -> dict[str, ModelPrice]:
     """Price of each model, refusing ceilings that could reach a costlier tier (ADR 0005).
 
@@ -108,10 +128,11 @@ def estimate(
 ) -> Estimate:
     """Worst case under the safety ceiling (ADR 0003): every pending episode spends it all."""
     pending = [s for s in specs if s.id not in done]
-    # Agent runs are checked after each call, so the last call may overshoot the ceiling by
-    # at most one call, itself assumed to be within the ceiling (ADR 0012).
-    budget = config.ceiling.max_total_tokens * (2 if config.agent else 1)
-    turns = config.ceiling.max_turns + (1 if config.agent else 0)
+    # Checked-after-call runs (an agent, ADR 0012, or a provider that cannot pre-count, ADR 0023)
+    # may overshoot the ceiling by at most one call, itself assumed within the ceiling.
+    post_call = _post_call_checked(config)
+    budget = config.ceiling.max_total_tokens * (2 if post_call else 1)
+    turns = config.ceiling.max_turns + (1 if post_call else 0)
     worst_usd = None
     if not config.unpriced:
         per_token = {m: p.max_usd_per_token for m, p in model_prices(config, prices).items()}
@@ -128,7 +149,7 @@ def estimate(
         worst_case_tokens=budget * len(pending),
         worst_case_usd=worst_usd,
         max_model_calls=generate_calls,
-        counted_before_calls=config.agent is None,
+        counted_before_calls=not post_call,
         simulated=config.simulated,
         rate_plan=rate_plan,
     )

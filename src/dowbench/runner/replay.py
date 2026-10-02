@@ -126,6 +126,10 @@ class RecordingProvider:
     def simulated(self) -> bool:
         return self._inner.simulated
 
+    @property
+    def counts_tokens(self) -> bool:
+        return self._inner.counts_tokens
+
     def begin_episode(self, episode_id: str, attempt: str) -> None:
         self._episode_id, self._attempt, self._turn = episode_id, attempt, 0
 
@@ -190,6 +194,14 @@ class ReplayProvider:
         # Mirror the recorded run: a real cassette replays as real data (marked replayed,
         # not simulated); a mock cassette stays SIMULATED and is never taken for a result.
         return self._simulated
+
+    @property
+    def counts_tokens(self) -> bool:
+        # Mirror the recorded provider: a cassette from a non-counting provider (ADR 0023)
+        # replays recorded None counts, so the loop must not demand a pre-call count.
+        from dowbench.runner.execute import provider_counts_tokens
+
+        return provider_counts_tokens(self._provider)
 
     def begin_episode(self, episode_id: str, attempt: str) -> None:
         self._episode_id = episode_id

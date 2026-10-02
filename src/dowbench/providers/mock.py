@@ -29,6 +29,7 @@ def build_mock(config: object, dataset: Dataset) -> MockProvider:
 class MockProvider:
     name = "mock"
     simulated = True
+    counts_tokens = True
 
     def __init__(
         self,

@@ -36,8 +36,9 @@ Changelog = "https://github.com/samuelrojas-dev/agent-cost-bench/blob/main/CHANG
 [project.optional-dependencies]
 gemini = ["google-genai>=2.25,<3"]
 anthropic = ["anthropic>=1.8,<2"]
+openai = ["openai>=1.40,<3"]
 dev = [
-    "dowbench[gemini,anthropic]",
+    "dowbench[gemini,anthropic,openai]",
     "hypothesis>=6",
     "pre-commit>=3",
     "pytest-cov>=5",
@@ -56,6 +57,7 @@ dowbench = "dowbench.cli:app"
 mock = "dowbench.providers.mock:build_mock"
 gemini = "dowbench.providers.gemini:build_gemini"
 anthropic = "dowbench.providers.claude:build_anthropic"
+openai = "dowbench.providers.openai:build_openai"
 
 [project.entry-points."dowbench.defenses"]
 token_budget = "dowbench.defenses.limits:TokenBudget"
@@ -70,6 +72,7 @@ gemini = "dowbench.providers.provider_data:GeminiCodec"
 mock = "dowbench.sut:map_mock_response"
 gemini = "dowbench.providers.gemini:map_sut_response"
 anthropic = "dowbench.providers.claude:map_sut_response"
+openai = "dowbench.providers.openai:map_sut_response"
 
 # Tool-definition loaders for `dowbench scan` (ADR 0022): a loader turns a framework's tool
 # export into the neutral ToolSpec list. A third party adds `from_langchain`, CrewAI, etc. by

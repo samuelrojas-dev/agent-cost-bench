@@ -94,6 +94,7 @@ def test_reserve_episode_stops_when_the_day_budget_would_be_exceeded() -> None:
 class _FakeProvider:
     name = "gemini"
     simulated = False
+    counts_tokens = True
 
     def __init__(self) -> None:
         self.acquired: list[int] = []

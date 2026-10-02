@@ -48,3 +48,17 @@ prices:
     max_prompt_tokens: 1048576
     source: https://ai.google.dev/gemini-api/docs/pricing
     retrieved: 2026-09-25
+
+  # Short-context, standard tier, verified by the repo owner on 2026-10-02 (the page is not
+  # reachable from the build environment). cache_read = cached input; cache_write = the cache
+  # write rate on the page. max_prompt_tokens is the upper edge of the short-context tier, the
+  # context window verified on platform.openai.com/docs/models/gpt-6-luna.
+  - provider: openai
+    model: gpt-6-luna
+    input_per_mtok: 0.10
+    output_per_mtok: 0.50
+    cache_read_per_mtok: 0.01
+    cache_write_per_mtok: 0.125
+    max_prompt_tokens: 272000
+    source: https://platform.openai.com/docs/pricing
+    retrieved: 2026-10-02

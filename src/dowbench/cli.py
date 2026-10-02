@@ -103,7 +103,7 @@ def _print_estimate(result: Estimate) -> None:
         + (
             "each preceded by one token count"
             if result.counted_before_calls
-            else "made by the agent and checked after each call"
+            else "checked after each call (no pre-call token count)"
         )
     )
     if result.rate_plan is not None:

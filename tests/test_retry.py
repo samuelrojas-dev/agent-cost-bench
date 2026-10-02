@@ -60,6 +60,7 @@ class _Flaky:
 
     name = "flaky"
     simulated = False
+    counts_tokens = True
 
     def __init__(self, fails: int) -> None:
         self.fails = fails
@@ -107,6 +108,7 @@ def test_retry_does_not_swallow_terminal_errors() -> None:
     class _Terminal:
         name = "t"
         simulated = False
+        counts_tokens = True
 
         def complete(self, request: Request) -> Response:
             raise UsageMappingError("unpriceable")

@@ -65,6 +65,10 @@ class RetryingProvider:
     def simulated(self) -> bool:
         return self._inner.simulated
 
+    @property
+    def counts_tokens(self) -> bool:
+        return self._inner.counts_tokens
+
     def begin_episode(self, episode_id: str, attempt: str) -> None:
         begin = getattr(self._inner, "begin_episode", None)
         if begin is not None:

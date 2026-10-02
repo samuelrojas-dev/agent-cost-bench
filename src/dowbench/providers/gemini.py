@@ -186,6 +186,7 @@ def _stop_reason(response: types.GenerateContentResponse, tool_calls: list[ToolC
 class GeminiProvider:
     name = "gemini"
     simulated = False
+    counts_tokens = True
 
     def __init__(self, client: _Client | None = None) -> None:
         if client is None:

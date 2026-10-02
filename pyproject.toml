@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "dowbench"
-version = "0.0.1"
+dynamic = ["version"]
 description = "Reproducible benchmark of denial-of-wallet attacks and defenses for LLM agents"
 readme = "README.md"
 license = "Apache-2.0"
@@ -28,8 +28,10 @@ dependencies = [
 ]
 
 [project.urls]
+Homepage = "https://github.com/samuelrojas-dev/agent-cost-bench"
 Repository = "https://github.com/samuelrojas-dev/agent-cost-bench"
 Issues = "https://github.com/samuelrojas-dev/agent-cost-bench/issues"
+Changelog = "https://github.com/samuelrojas-dev/agent-cost-bench/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 gemini = ["google-genai>=2.25,<3"]
@@ -77,8 +79,28 @@ openai = "dowbench.scan.loaders:from_openai_tools"
 langchain = "dowbench.scan.loaders:from_langchain"
 openapi = "dowbench.scan.loaders:from_openapi"
 
+# Single source of truth for the version: read __version__ from the package.
+[tool.hatch.version]
+path = "src/dowbench/__init__.py"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/dowbench"]
+
+# Sdist ships the package plus the files needed to reproduce and verify a release.
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/dowbench",
+    "tests",
+    "examples",
+    "scripts",
+    "configs",
+    "docs",
+    "results/cassettes",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "pyproject.toml",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

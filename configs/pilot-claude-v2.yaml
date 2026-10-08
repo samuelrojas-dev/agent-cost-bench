@@ -1,0 +1,44 @@
+# Claude pilot v2: the same matrix as pilot-gemini-v2 (the eight ADR 0016 amplifying attacks,
+# plus loop-identical-001 and bloat-appendix-001 as seed references) against every defense,
+# so the two providers are directly comparable. One repeat; priced from the table
+# (claude-sonnet-5); run with --budget-usd.
+#
+# No rate_limit is set: Anthropic limits are per-account tier, not a fixed free tier like
+# Gemini's (ADR 0014), so add one matching your tier before a real run if you want dowbench
+# to pace and split the run. It does not affect the worst-case cost the estimate reports.
+run_name: pilot-claude-sonnet-v2
+provider: anthropic
+models: [claude-sonnet-5]
+attacks:
+  - chain-crossref-001
+  - loop-cursor-001
+  - loop-synonyms-001
+  - grow-page-001
+  - grow-echo-001
+  - flood-audit-001
+  - mcp-paging-contract-001
+  - bloat-verify-001
+  - loop-identical-001
+  - bloat-appendix-001
+repeats: 1
+seed: 0
+success_threshold: 5.0
+# Same ceiling as pilot-gemini-v2 so the two runs are comparable. Any episode that would
+# exceed 6 turns or 16000 total tokens is censored, and dowbench reports its cost and
+# amplification as a LOWER BOUND (ADR 0003). Claude output tokens are billed higher than
+# Gemini's, so the worst-case USD is larger for the same token ceiling — see `dowbench
+# estimate configs/pilot-claude-v2.yaml`.
+ceiling:
+  max_turns: 6
+  max_tokens_per_call: 512
+  max_total_tokens: 16000
+defenses:
+  - name: none
+  - name: token_budget
+    params: {max_total_tokens: 6000, max_tokens_per_call: 512}
+  - name: turn_limit
+    params: {max_turns: 4}
+  - name: loop_detect
+    params: {max_identical_calls: 2, max_calls_per_tool: 4, max_total_tool_calls: 6}
+  - name: result_cap
+    params: {max_result_chars: 2000}

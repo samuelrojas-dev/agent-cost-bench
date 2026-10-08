@@ -7,6 +7,7 @@ Simulated runs carry a banner on top and cannot be mistaken for results.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 
 from dowbench.metrics import RunSummary
@@ -39,17 +40,22 @@ def _table(header: list[str], rows: list[list[str]]) -> list[str]:
     return lines
 
 
-def load(run_dir: Path) -> tuple[RunInfo, RunSummary]:
+def load(run_dir: Path) -> tuple[RunInfo, RunSummary, dict[str, int]]:
     store = RunStore(run_dir)
     for path in (store.run_path, store.summary_path):
         if not path.exists():
             raise FileNotFoundError(f"{path} not found; run `dowbench run` first")
     info = RunInfo.model_validate_json(store.run_path.read_text(encoding="utf-8"))
     summary = RunSummary.model_validate_json(store.summary_path.read_text(encoding="utf-8"))
-    return info, summary
+    # Tool-call counts live in episodes.jsonl, not summary.json, so the report can show them
+    # without changing the summary bytes the published cassette hashes cover (ADR 0024).
+    tool_calls = {e.episode_id: e.tool_calls for e in store.load_episodes()}
+    return info, summary, tool_calls
 
 
-def render(info: RunInfo, summary: RunSummary) -> str:
+def render(
+    info: RunInfo, summary: RunSummary, tool_calls_by_episode: Mapping[str, int] | None = None
+) -> str:
     config = info.config
     ceiling = config.ceiling
     models = ", ".join(
@@ -115,9 +121,10 @@ def render(info: RunInfo, summary: RunSummary) -> str:
             for d in summary.defenses
         ],
     )
+    calls_by_episode = tool_calls_by_episode or {}
     lines += ["", "## Attack episodes", ""]
     lines += _table(
-        ["Model", "Defense", "Attack", "Repeat", "Status", "A", "Success"],
+        ["Model", "Defense", "Attack", "Repeat", "Status", "A", "Tool calls", "Success"],
         [
             [
                 f"`{a.model}`",
@@ -126,6 +133,7 @@ def render(info: RunInfo, summary: RunSummary) -> str:
                 str(a.repeat),
                 a.status,
                 _num(a.amplification, "{:.1f}x"),
+                str(calls_by_episode[a.episode_id]) if a.episode_id in calls_by_episode else "n/a",
                 _success(a.success),
             ]
             for a in sorted(summary.attacks, key=lambda a: (a.model, a.defense, a.attack_id))

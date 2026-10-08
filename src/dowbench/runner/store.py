@@ -80,6 +80,10 @@ class EpisodeRecord(BaseModel):
     status: EpisodeStatus
     reason: str | None
     turns: int
+    # Tool invocations the agent made across the episode (ADR 0024). Defaults to 0 so episode
+    # rows written before this field parse unchanged; it is not in summary.json, so the
+    # published cassette hashes (ADR 0015) are untouched.
+    tool_calls: int = 0
     usage: Usage
     cost_usd: float | None  # None for unpriced runs (ADR 0008)
     simulated: bool

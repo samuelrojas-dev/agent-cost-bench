@@ -93,6 +93,28 @@ jobs:
           fail-on: none
           version: ""
 
+  benchmark-mock:
+    name: benchmark-mock (offline, free)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Runs the whole attack x defense matrix on the deterministic mock provider — no key, no
+    # spend — and asserts the vulnerable->mitigated loop still holds (undefended attack amplifies
+    # past the threshold; a defense brings it down). Mock numbers are SIMULATED and never
+    # published (CLAUDE.md); this job guards the mechanism, not a result.
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install dowbench from this checkout
+        run: python -m pip install -e .
+      - name: Run the mock benchmark and assert the amplify->mitigate loop holds
+        run: |
+          dowbench run configs/pilot.yaml --out "$RUNNER_TEMP/mockrun"
+          python scripts/check_mock_benchmark.py "$RUNNER_TEMP/mockrun/pilot-mock"
+
   gitleaks:
     runs-on: ubuntu-latest
     timeout-minutes: 10

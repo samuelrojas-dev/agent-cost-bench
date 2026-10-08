@@ -428,6 +428,7 @@ def _run_one(
         status=result.status,
         reason=result.reason,
         turns=result.turns,
+        tool_calls=sum(c.tool_calls for c in result.calls),
         usage=result.usage,
         cost_usd=0.0,
         simulated=simulated,

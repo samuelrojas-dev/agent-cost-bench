@@ -32,7 +32,18 @@ evidence.
 > **Status: alpha.** The scan, the harness, the safety rails and the Gemini/Claude adapters
 > work and are tested. Pilot findings are in [The evidence behind the scan](#the-evidence-behind-the-scan-pilot)
 > below — replay-verified and reproducible, but early pilots (`n = 1`–`5`): directional, not
-> settled rates. Every number comes from a real, reproducible run.
+> settled rates. Every number comes from a real, reproducible run. See
+> [Current limitations](#current-limitations) for the full, honest list of caveats.
+
+## What is denial-of-wallet?
+
+Denial-of-wallet (DoW) is a denial-of-service attack on your **bill** rather than your uptime.
+An LLM agent pays by the token for every call it makes, so an attacker who can influence what the
+agent reads — a web page it fetches, a tool result it ingests, a user prompt — can push it into
+doing far more billed work than the task needs: looping through tool calls, flooding its own
+output, or padding a tool result that is then re-sent as input on every turn. The agent still
+*works*; it just costs many times more. `agent-cost-bench` (CLI: `dowbench`) measures that
+multiplier on the provider's own usage report and shows which defenses actually cut it.
 
 ## Why another tool
 
@@ -154,6 +165,11 @@ Mock runs are labeled `SIMULATED`, and a replay of a mock run stays `SIMULATED`.
 numbers show that the pipeline works; they are not results and must not be published.
 `dowbench estimate configs/pilot.yaml` and `dowbench list attacks|defenses|benign` show
 the worst case and the matrix without running anything.
+
+**End-to-end walkthrough.** [`docs/walkthrough.md`](docs/walkthrough.md) runs the full
+baseline → attack → mitigation story on the one real, replay-verified finding, entirely
+offline: the undefended attack costs **8.8×** the benign baseline, and `result_cap` brings it
+to **4.0×** — every command reproducible with no key and no spend.
 
 ## Benchmark your own agent
 
@@ -423,6 +439,42 @@ rules are enforced in [`CLAUDE.md`](CLAUDE.md) and hold for every contribution:
 
 CI runs the suite on Ubuntu and Windows across Python 3.11 and 3.13, with `ruff`, `mypy
 --strict`, coverage, property tests and gitleaks.
+
+## Current limitations
+
+This project is **alpha** and deliberately honest about what it has and has not shown. Read every
+number with these caveats:
+
+- **Small samples, one real model.** The real findings come from the maintainer's local runs on a
+  single model (`gemini-3.5-flash-lite`) at `n = 1`–`5`. They are directional, not settled rates;
+  the Wilson intervals are wide on purpose.
+- **Mock numbers are not evidence.** The offline `configs/pilot.yaml` demo and every mock run are
+  `SIMULATED`: the mock is a hand-written, maximally-susceptible agent, so its amplification factors
+  are an artifact of its design, **not** a measurement of any real model. They show the pipeline
+  works; they are never published or compared with real runs.
+- **The scan is a pattern match, not a prediction.** It reads tool *schemas* only, so it flags a
+  shape that amplified cost in the pilot — it cannot see your traffic and never predicts your bill.
+  Absence of a finding is not proof of safety; it checks known shapes only.
+- **One attack clears the bar so far.** Of the 14 seed attacks, only `bloat-verify-001` crosses the
+  5× threshold against the tested model; the rest are low-power against it. That is a finding about
+  these synthetic attacks and this model, not a general claim.
+- **OpenAI has no measured results yet.** The OpenAI adapter and a gated real-run workflow exist,
+  but no authorized real OpenAI run has been published — so there are no OpenAI numbers, and none
+  are invented.
+- **Reproducible by replay, not by re-running.** Real numbers are reproduced offline from the
+  committed cassettes; re-running against a live provider costs money and will vary slightly.
+- **Tool-call count is descriptive.** It is reported per episode (ADR 0024) but success is still
+  decided on cost (`A ≥ 5`): `bloat-verify-001` makes the same 2 tool calls with and without its
+  mitigation, so counting calls alone would miss a result-size attack.
+
+## Roadmap & contributing
+
+Where the project is headed — correctness first, then architecture, scale, rigor, breadth and
+release — is tracked in [`ROADMAP.md`](ROADMAP.md), with the reasoning in
+[ADR 0019](docs/adr/0019-path-to-1.0.md). Contributions are welcome under the rules in
+[`CONTRIBUTING.md`](CONTRIBUTING.md) and [`CLAUDE.md`](CLAUDE.md): every number from a real,
+reproducible run; tests offline on the mock; small commits; and an ADR for each non-obvious
+decision.
 
 ## Design decisions
 

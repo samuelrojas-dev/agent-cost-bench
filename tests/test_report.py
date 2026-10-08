@@ -7,7 +7,7 @@ from typer.testing import CliRunner
 from dowbench.attacks.schema import load_dataset
 from dowbench.cli import app
 from dowbench.metering.pricing import PriceTable
-from dowbench.report import SIMULATED_BANNER, load, render
+from dowbench.report import SIMULATED_BANNER, _success, load, render
 from dowbench.runner.config import RunConfig
 from dowbench.runner.execute import build_provider, execute
 
@@ -29,8 +29,8 @@ def run_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 
 def test_report_is_deterministic_and_complete(run_dir: Path) -> None:
-    info, summary = load(run_dir)
-    text = render(info, summary)
+    info, summary, tool_calls = load(run_dir)
+    text = render(info, summary, tool_calls)
     assert text == render(*load(run_dir))  # same files, same report
     assert text.startswith(f"# Results: {summary.run_name}\n")
     assert SIMULATED_BANNER in text
@@ -41,15 +41,27 @@ def test_report_is_deterministic_and_complete(run_dir: Path) -> None:
     assert len(attack_rows) == len(summary.defenses) + len(summary.attacks)
 
 
+def test_attack_episodes_table_reports_tool_calls(run_dir: Path) -> None:
+    info, summary, tool_calls = load(run_dir)
+    text = render(info, summary, tool_calls)
+    assert "| Tool calls |" in text  # the column is present in the Attack episodes header
+    # At least one attack episode made tool calls, and the report shows that real count, not n/a.
+    assert any(count > 0 for count in tool_calls.values())
+    busiest = max(summary.attacks, key=lambda a: tool_calls.get(a.episode_id, 0))
+    assert f"| {tool_calls[busiest.episode_id]} | {_success(busiest.success)} |" in text
+    # Without the map, the column is honest about not knowing rather than inventing a count.
+    assert "| n/a | " in render(info, summary)
+
+
 def test_reproduce_section_holds_the_exact_config(run_dir: Path) -> None:
-    info, summary = load(run_dir)
-    text = render(info, summary)
+    info, summary, tool_calls = load(run_dir)
+    text = render(info, summary, tool_calls)
     block = text.split("```json\n", 1)[1].split("\n```", 1)[0]
     assert RunConfig.model_validate(json.loads(block)) == info.config
 
 
 def test_real_runs_have_no_banner_and_unpriced_runs_no_usd(run_dir: Path) -> None:
-    info, summary = load(run_dir)
+    info, summary, tool_calls = load(run_dir)
     real_info = info.model_copy(
         update={
             "simulated": False,
@@ -58,7 +70,7 @@ def test_real_runs_have_no_banner_and_unpriced_runs_no_usd(run_dir: Path) -> Non
             "config": info.config.model_copy(update={"unpriced": True}),
         }
     )
-    text = render(real_info, summary.model_copy(update={"simulated": False}))
+    text = render(real_info, summary.model_copy(update={"simulated": False}), tool_calls)
     assert SIMULATED_BANNER not in text
     assert "served version not recorded" in text
     assert f"| Billed in this run dir | {info.spent_tokens:,} tokens |" in text

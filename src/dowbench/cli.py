@@ -57,6 +57,7 @@ class Listable(StrEnum):
 class ScanFormat(StrEnum):
     markdown = "markdown"
     plain = "plain"
+    sarif = "sarif"
 
 
 class ScanFailOn(StrEnum):
@@ -189,7 +190,8 @@ def scan_cmd(
         typer.echo(str(exc), err=True)
         raise typer.Exit(2) from None
     report = scan_tools(tools)
-    text = render(report, "plain" if fmt is ScanFormat.plain else "markdown")
+    fmt_map = {"plain": "plain", "markdown": "markdown", "sarif": "sarif"}
+    text = render(report, fmt_map[fmt.value], tools_file=str(tools_path))
     typer.echo(text, nl=False)
     if fail_on is not ScanFailOn.none and report.has_at_least(_FAIL_RANK[fail_on]):
         typer.echo(

@@ -331,6 +331,53 @@ def test_render_empty_report_says_no_match_is_not_proof_of_safety() -> None:
     assert "not a proof" in render(report, "plain")
 
 
+def test_render_sarif_produces_valid_sarif_structure() -> None:
+    report = scan_tools([_tool("web_search", "search")])
+    sarif_text = render(report, "sarif", tools_file="my_tools.json")
+    sarif = json.loads(sarif_text)
+    assert sarif["version"] == "2.1.0"
+    assert sarif["$schema"] == "https://json.schemastore.org/sarif-2.1.0.json"
+    assert len(sarif["runs"]) == 1
+    run = sarif["runs"][0]
+    assert run["tool"]["driver"]["name"] == "dowbench-scan"
+    assert len(run["results"]) >= 1
+    result = run["results"][0]
+    assert result["ruleId"] == "unbounded-result"
+    assert result["level"] == "error"
+    assert "my_tools.json" in result["locations"][0]["physicalLocation"]["artifactLocation"]["uri"]
+    assert len(result["fixes"]) == 1
+    # Rules are deduplicated
+    rule_ids = [r["id"] for r in run["tool"]["driver"]["rules"]]
+    assert len(rule_ids) == len(set(rule_ids))
+
+
+def test_render_sarif_empty_report_has_no_results() -> None:
+    report = ScanReport(tool_count=1, findings=[])
+    sarif = json.loads(render(report, "sarif"))
+    assert sarif["runs"][0]["results"] == []
+    assert sarif["runs"][0]["tool"]["driver"]["rules"] == []
+
+
+def test_render_sarif_severity_mapping() -> None:
+    """high→error, medium→warning, low→note."""
+    from dowbench.scan.engine import Finding
+
+    report = ScanReport(
+        tool_count=3,
+        findings=[
+            Finding(rule="r1", tool="t", severity="high", message="m", pattern="p",
+                    evidence="e", fix="f", adr="a"),
+            Finding(rule="r2", tool="t", severity="medium", message="m", pattern="p",
+                    evidence="e", fix="f", adr="a"),
+            Finding(rule="r3", tool="t", severity="low", message="m", pattern="p",
+                    evidence="e", fix="f", adr="a"),
+        ],
+    )
+    sarif = json.loads(render(report, "sarif"))
+    levels = [r["level"] for r in sarif["runs"][0]["results"]]
+    assert levels == ["error", "warning", "note"]
+
+
 # --- CLI -------------------------------------------------------------------------------------
 
 
@@ -339,6 +386,17 @@ def test_cli_scan_reports_findings_and_exits_zero() -> None:
     assert result.exit_code == 0, result.output
     assert "unbounded-result" in result.output
     assert "8.8x in our pilot" in result.output
+
+
+def test_cli_scan_sarif_format() -> None:
+    result = runner.invoke(app, ["scan", str(FIXTURE), "--format", "sarif"])
+    assert result.exit_code == 0, result.output
+    sarif = json.loads(result.output)
+    assert sarif["version"] == "2.1.0"
+    assert any(r["ruleId"] == "unbounded-result" for r in sarif["runs"][0]["results"])
+    # tools_file should be the path we passed
+    loc = sarif["runs"][0]["results"][0]["locations"][0]
+    assert str(FIXTURE) in loc["physicalLocation"]["artifactLocation"]["uri"]
 
 
 def test_cli_scan_markdown_is_the_default() -> None:

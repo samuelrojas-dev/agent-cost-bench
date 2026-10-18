@@ -20,9 +20,15 @@ inputs:
     required: false
     default: "high"
   format:
-    description: "Report format printed to the job log: markdown or plain."
+    description: "Report format printed to the job log: markdown, plain, or sarif."
     required: false
     default: "markdown"
+  upload-sarif:
+    description: >-
+      When true and format is sarif, upload the SARIF file to GitHub Code Scanning so findings
+      appear as code annotations on PRs. Requires the security-events: write permission.
+    required: false
+    default: "false"
   version:
     description: >-
       dowbench version to install, as a git ref of this repository (branch, tag or SHA). Pin a tag
@@ -51,8 +57,27 @@ runs:
         python -m pip install "dowbench @ git+https://github.com/samuelrojas-dev/agent-cost-bench@${{ inputs.version }}"
     - name: Scan tool definitions
       shell: bash
-      run: >-
-        dowbench scan "${{ inputs.tools }}"
-        --loader "${{ inputs.loader }}"
-        --fail-on "${{ inputs.fail-on }}"
-        --format "${{ inputs.format }}"
+      env:
+        DOWBENCH_TOOLS: ${{ inputs.tools }}
+        DOWBENCH_LOADER: ${{ inputs.loader }}
+        DOWBENCH_FAIL_ON: ${{ inputs.fail-on }}
+        DOWBENCH_FORMAT: ${{ inputs.format }}
+        DOWBENCH_UPLOAD_SARIF: ${{ inputs.upload-sarif }}
+      run: |
+        if [ "$DOWBENCH_FORMAT" = "sarif" ] && [ "$DOWBENCH_UPLOAD_SARIF" = "true" ]; then
+          dowbench scan "$DOWBENCH_TOOLS" \
+            --loader "$DOWBENCH_LOADER" \
+            --fail-on "$DOWBENCH_FAIL_ON" \
+            --format sarif > dowbench-scan.sarif
+          echo "sarif_file=dowbench-scan.sarif" >> "$GITHUB_OUTPUT"
+        else
+          dowbench scan "$DOWBENCH_TOOLS" \
+            --loader "$DOWBENCH_LOADER" \
+            --fail-on "$DOWBENCH_FAIL_ON" \
+            --format "$DOWBENCH_FORMAT"
+        fi
+    - name: Upload SARIF to GitHub Code Scanning
+      if: inputs.format == 'sarif' && inputs.upload-sarif == 'true' && always()
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: dowbench-scan.sarif

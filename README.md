@@ -467,6 +467,14 @@ number with these caveats:
   decided on cost (`A ≥ 5`): `bloat-verify-001` makes the same 2 tool calls with and without its
   mitigation, so counting calls alone would miss a result-size attack.
 
+## Related
+
+**[agent-security-lab](https://github.com/samuelrojas-dev/agent-security-lab)** — the other half
+of the problem: while this bench measures *denial-of-wallet* attacks (how an attacker can inflate
+your LLM spend), the security lab measures *data exfiltration* (what secrets can leave the
+system). Both projects share the same approach: deterministic offline testing, CI gates, and SARIF
+integration.
+
 ## Roadmap & contributing
 
 Where the project is headed — correctness first, then architecture, scale, rigor, breadth and

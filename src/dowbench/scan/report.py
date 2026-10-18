@@ -1,17 +1,22 @@
-"""Render a ``ScanReport`` as Markdown or plain text (ADR 0022).
+"""Render a ``ScanReport`` as Markdown, plain text, or SARIF (ADR 0022).
 
 The report leads with plain language and an honesty note — the scan is a pattern match, not a
 cost prediction — and links the attack/defense vocabulary for those who want it, so a newcomer
 needs no new terms at the door.
+
+SARIF output (``--format sarif``) produces a file that GitHub Code Scanning and other SARIF
+consumers understand, so ``dowbench scan`` can gate a CI pipeline.
 """
 
 from __future__ import annotations
 
-from typing import Literal
+import json
+from pathlib import Path
+from typing import Any, Literal
 
-from dowbench.scan.engine import ScanReport, Severity
+from dowbench.scan.engine import Finding, ScanReport, Severity
 
-Format = Literal["markdown", "plain"]
+Format = Literal["markdown", "plain", "sarif"]
 
 _HONESTY = (
     "dowbench scan matches the shape of your tool definitions against cost-amplification "
@@ -81,6 +86,70 @@ def _render_markdown(report: ScanReport) -> str:
     return "\n".join(lines) + "\n"
 
 
-def render(report: ScanReport, fmt: Format = "markdown") -> str:
+_SARIF_LEVEL: dict[Severity, str] = {"high": "error", "medium": "warning", "low": "note"}
+
+_INFO_URI = "https://github.com/samuelrojas-dev/agent-cost-bench"
+
+
+def _sarif_rule(finding: Finding) -> dict[str, Any]:
+    return {
+        "id": finding.rule,
+        "shortDescription": {"text": finding.pattern},
+        "helpUri": _INFO_URI,
+        "properties": {"adr": finding.adr},
+    }
+
+
+def _sarif_result(finding: Finding, tools_file: str) -> dict[str, Any]:
+    return {
+        "ruleId": finding.rule,
+        "level": _SARIF_LEVEL[finding.severity],
+        "message": {"text": finding.message},
+        "locations": [
+            {
+                "physicalLocation": {
+                    "artifactLocation": {"uri": tools_file},
+                },
+            }
+        ],
+        "fixes": [{"description": {"text": finding.fix}}],
+    }
+
+
+def _render_sarif(report: ScanReport, tools_file: str = "tools.json") -> str:
+    """Produce a SARIF 2.1.0 document for GitHub Code Scanning / compatible consumers."""
+    seen_rules: dict[str, dict[str, Any]] = {}
+    results: list[dict[str, Any]] = []
+    for f in report.findings:
+        if f.rule not in seen_rules:
+            seen_rules[f.rule] = _sarif_rule(f)
+        results.append(_sarif_result(f, tools_file))
+    sarif: dict[str, Any] = {
+        "version": "2.1.0",
+        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+        "runs": [
+            {
+                "tool": {
+                    "driver": {
+                        "name": "dowbench-scan",
+                        "informationUri": _INFO_URI,
+                        "rules": list(seen_rules.values()),
+                    },
+                },
+                "results": results,
+            },
+        ],
+    }
+    return json.dumps(sarif, ensure_ascii=False, indent=1) + "\n"
+
+
+def render(
+    report: ScanReport,
+    fmt: Format = "markdown",
+    *,
+    tools_file: str = "tools.json",
+) -> str:
     """Render ``report`` in the requested format."""
+    if fmt == "sarif":
+        return _render_sarif(report, tools_file=tools_file)
     return _render_markdown(report) if fmt == "markdown" else _render_plain(report)

@@ -395,7 +395,8 @@ def test_cli_scan_sarif_format() -> None:
     assert sarif["version"] == "2.1.0"
     assert any(r["ruleId"] == "unbounded-result" for r in sarif["runs"][0]["results"])
     # tools_file should be the path we passed
-    assert str(FIXTURE) in sarif["runs"][0]["results"][0]["locations"][0]["physicalLocation"]["artifactLocation"]["uri"]
+    loc = sarif["runs"][0]["results"][0]["locations"][0]
+    assert str(FIXTURE) in loc["physicalLocation"]["artifactLocation"]["uri"]
 
 
 def test_cli_scan_markdown_is_the_default() -> None:

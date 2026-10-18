@@ -11,7 +11,6 @@ consumers understand, so ``dowbench scan`` can gate a CI pipeline.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Any, Literal
 
 from dowbench.scan.engine import Finding, ScanReport, Severity

@@ -119,3 +119,79 @@ def test_retry_does_not_swallow_terminal_errors() -> None:
     provider = RetryingProvider(_Terminal(), RetryPolicy(base_delay_s=0), sleep=lambda _: None)
     with pytest.raises(UsageMappingError):
         provider.complete(_req())
+
+
+def test_count_tokens_retries_transient() -> None:
+    """count_tokens goes through the same retry loop as complete."""
+
+    class _FlakyCounter:
+        name = "fc"
+        simulated = False
+        counts_tokens = True
+        attempts = 0
+
+        def complete(self, request: Request) -> Response:
+            return Response(stop_reason="end_turn", usage=Usage(input_tokens=1, output_tokens=1))
+
+        def count_tokens(self, request: Request) -> int | None:
+            self.attempts += 1
+            if self.attempts <= 1:
+                raise _Status(503)
+            return 42
+
+    inner = _FlakyCounter()
+    provider = RetryingProvider(inner, RetryPolicy(max_attempts=3, base_delay_s=0), sleep=lambda _: None)
+    assert provider.count_tokens(_req()) == 42
+    assert inner.attempts == 2
+
+
+def test_count_tokens_exhausted_raises() -> None:
+    class _AlwaysFails:
+        name = "af"
+        simulated = False
+        counts_tokens = True
+
+        def complete(self, request: Request) -> Response:
+            raise NotImplementedError
+
+        def count_tokens(self, request: Request) -> int | None:
+            raise _Status(429)
+
+    provider = RetryingProvider(_AlwaysFails(), RetryPolicy(max_attempts=2, base_delay_s=0), sleep=lambda _: None)
+    with pytest.raises(TransientProviderError, match="after 2 attempts"):
+        provider.count_tokens(_req())
+
+
+def test_begin_episode_delegates_when_present() -> None:
+    class _WithBegin:
+        name = "wb"
+        simulated = False
+        counts_tokens = False
+        episodes: list[tuple[str, str]] = []
+
+        def begin_episode(self, episode_id: str, attempt: str) -> None:
+            self.episodes.append((episode_id, attempt))
+
+        def complete(self, request: Request) -> Response:
+            return Response(stop_reason="end_turn", usage=Usage(input_tokens=1, output_tokens=1))
+
+    inner = _WithBegin()
+    inner.episodes = []
+    provider = RetryingProvider(inner, RetryPolicy(), sleep=lambda _: None)
+    provider.begin_episode("ep1", "a")
+    assert inner.episodes == [("ep1", "a")]
+
+
+def test_begin_episode_skipped_when_absent() -> None:
+    """begin_episode is a no-op when the inner provider doesn't have it."""
+
+    class _NoBegin:
+        name = "nb"
+        simulated = False
+        counts_tokens = False
+
+        def complete(self, request: Request) -> Response:
+            return Response(stop_reason="end_turn", usage=Usage(input_tokens=1, output_tokens=1))
+
+    provider = RetryingProvider(_NoBegin(), RetryPolicy(), sleep=lambda _: None)
+    provider.begin_episode("ep1", "a")  # should not raise
